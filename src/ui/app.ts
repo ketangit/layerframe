@@ -1,4 +1,4 @@
-// LayerFrame Studio — browser UI (single frame).
+// LayerFrame — browser UI (single frame).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import ClipperLib from 'clipper-lib';

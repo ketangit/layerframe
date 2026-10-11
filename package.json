@@ -1,5 +1,5 @@
 {
-  "name": "layerframe-studio",
+  "name": "layerframe",
   "version": "1.0.0",
   "description": "Local parametric multi-layer colour frame generator (HueForge/LayerStudio style) with JSON API and MCP server",
   "main": "server.ts",

@@ -1,4 +1,4 @@
-// LayerFrame Studio — local server (no dependencies beyond the geometry libs).
+// LayerFrame — local server (no dependencies beyond the geometry libs).
 // Serves the web app and a JSON API that the UI and the MCP server both use.
 // Runs directly on Node >= 24 (native type stripping). Dev: Vite as middleware with HMR.
 // Prod (--prod or NODE_ENV=production): serves the built dist/.
@@ -147,4 +147,4 @@ if (!PROD) {
   });
 }
 
-server.listen(PORT, '127.0.0.1', () => console.log(`LayerFrame Studio${PROD ? '' : ' (dev)'} → http://localhost:${PORT}`));
+server.listen(PORT, '127.0.0.1', () => console.log(`LayerFrame${PROD ? '' : ' (dev)'} → http://localhost:${PORT}`));

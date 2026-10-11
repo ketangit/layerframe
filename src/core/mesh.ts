@@ -1,4 +1,4 @@
-// LayerFrame Studio — meshing + export (STL / 3MF). Works in browser and Node.
+// LayerFrame — meshing + export (STL / 3MF). Works in browser and Node.
 import * as THREE from 'three';
 import type JSZipType from 'jszip';
 import { buildLayers, normalize } from './frame-core.ts';
@@ -104,7 +104,7 @@ export async function build3MF(objects: Object3MF[], JSZip: JSZipCtor): Promise<
   const mats = `<basematerials id="1">${colors.map((c, i) => `<base name="Filament ${i + 1}" displaycolor="${c}"/>`).join('')}</basematerials>`;
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
-<metadata name="Application">LayerFrame Studio</metadata>
+<metadata name="Application">LayerFrame</metadata>
 <resources>${mats}${res.join('')}</resources>
 <build>${build.join('')}</build>
 </model>`;

@@ -1,4 +1,4 @@
-# Memory — LayerFrame Studio
+# Memory — LayerFrame
 
 > Project status, decisions and blockers. Read on session start; update in place as work progresses. Keep entries terse.
 
@@ -89,6 +89,7 @@
   - The zip is named `<Template>_svg_layers.zip` (from #5), not `_layers_svg.zip` as the issue said.
 - **2026-10-11** — UI testing gotcha: a click-through on the test server writes the real `state.json` through the live sync. Back it up first and restore it afterward (CLAUDE.md already says this). It happened during the #6 check and was restored from the backup.
 - **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
+- **2026-10-11** — Renamed repo `ketangit/layerframe-studio` → `ketangit/layerframe`, product "LayerFrame Studio" → "LayerFrame", local folder → `ClaudeCoWork/layerframe`. MCP server name is `layerframe`; `LAYERFRAME_URL` unchanged.
 
 ## Open Questions / Blockers
 

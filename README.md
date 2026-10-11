@@ -1,4 +1,4 @@
-# LayerFrame Studio
+# LayerFrame
 
 A local, parametric generator for multi-layer colour frames, built for Bambu Lab AMS printing. It works like LayerStudio's "Layered Art" mode: stepped terraces, a raised motif and a lace top layer, each layer its own filament. This is an independent implementation and contains no LayerStudio code.
 
@@ -125,9 +125,9 @@ Keep `npm start` running, then register the MCP server with your client. Example
 ```json
 {
   "mcpServers": {
-    "layerframe-studio": {
+    "layerframe": {
       "command": "node",
-      "args": ["E:/ketan/ClaudeCoWork/layerframe-studio/mcp/server.ts"],
+      "args": ["E:/ketan/ClaudeCoWork/layerframe/mcp/server.ts"],
       "env": { "LAYERFRAME_URL": "http://localhost:5317" }
     }
   }
