@@ -60,6 +60,14 @@
   - `'filament'`: strokes in the layer's filament color, for previews that match the print.
   - In both modes the layer label carries the filament color.
   - The hairline stays 0.01 mm, so it looks faint in Inkscape's normal view. Use Outline view to inspect it.
+- **2026-10-11** — #3 DXF writer:
+  - R12 (AC1009), hand-written, CRLF line endings.
+  - `HEADER` (`$ACADVER`, `$INSUNITS 4`, `$EXTMIN`/`$EXTMAX`), `TABLES` (`LTYPE CONTINUOUS` plus a `LAYER` table with `0` and one layer per frame layer), `ENTITIES` (closed `POLYLINE`/`VERTEX`/`SEQEND` only).
+  - Y up, with the bbox minimum at (0, 0). The SVG flips Y; DXF doesn't need to.
+  - `CUT_ACI` is the DXF counterpart of `CUT_COLORS`, because R12 has no true color.
+  - Layer names are sanitized to `[A-Za-z0-9_-]`, max 31 characters.
+  - Verified: `uvx ezdxf audit` reports no errors on 16 sample files. An `ezdxf` read gives units 4 (mm), all polylines closed, and extents of 141.600 × 243.200 mm. Inkscape 1.3.2 imports it at the right mm size with one color per layer.
+  - LibreCAD isn't installed, so it hasn't been checked.
 - **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
 
 ## Open Questions / Blockers

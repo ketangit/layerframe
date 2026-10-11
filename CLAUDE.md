@@ -48,14 +48,14 @@ server.ts                 HTTP server: JSON API + SSE; mounts Vite middleware in
 mcp/server.ts             MCP stdio server — thin wrapper over the HTTP API
 src/core/frame-core.ts    GEOMETRY CORE — types, schema, defaults, templates, motifs, placements, layers, state
 src/core/mesh.ts          extrusion (three.js), binary STL + 3MF writers
-src/core/vector.ts        2D export: cleanRegions + per-layer / stacked SVG (laser, CNC)
+src/core/vector.ts        2D export: cleanRegions + per-layer / stacked SVG and DXF R12 (laser, CNC)
 src/ui/index.html         UI shell; Vite root
 src/ui/styles.css         CSS variables; light + dark via prefers-color-scheme (imported from app.ts)
 src/ui/app.ts             three.js viewer, parameter panel, template gallery, live sync
 src/ui/thumb.ts           top-view SVG of a built frame (template thumbnails)
 .github/workflows/ci.yml  PR check: npm ci, typecheck, npm test
 test/core.test.ts         node:test suite for the core (templates x arc, applyPatch, migrate)
-test/vector.test.ts       2D export: cleaned rings, closed subpaths, viewBox = out_w/out_h, well-formed SVG
+test/vector.test.ts       2D export: SVG (closed subpaths, viewBox, well-formed) + DXF (structure, closed polylines, bbox, layers)
 vite.config.ts            root src/ui, outDir dist/
 tsconfig.json             strict, noEmit, allowImportingTsExtensions, erasableSyntaxOnly
 state.json, exports/, dist/   runtime / build output (gitignored)
