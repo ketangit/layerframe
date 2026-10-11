@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import ClipperLib from 'clipper-lib';
 import { PATTERN_LAYERS, SCHEMA, TEMPLATES, buildLayers } from '../src/core/frame-core.ts';
 import type { Layer, Region, Ring } from '../src/core/frame-core.ts';
-import { CUT_ACI, CUT_COLORS, cleanRegions, layerDXF, layerSVG, stackDXF, stackSVG } from '../src/core/vector.ts';
+import { CUT_ACI, CUT_COLORS, cleanRegions, exportWarnings, layerDXF, layerSVG, prepareExport, stackDXF, stackSVG } from '../src/core/vector.ts';
 
 const TOL = 0.01;
 
@@ -253,5 +253,81 @@ describe('DXF output', () => {
     assert.ok(s.type === 'int');
     assert.ok(CUT_ACI.length >= s.max + PATTERN_LAYERS);
     assert.equal(new Set(CUT_ACI).size, CUT_ACI.length);
+  });
+});
+
+// ---------- kerf + thin-feature warnings ----------
+const ringBounds = (rings: Ring[]) => {
+  const xs = rings.flatMap((r) => r.map(([x]) => x)), ys = rings.flatMap((r) => r.map(([, y]) => y));
+  return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+};
+const ringArea = (r: Ring) => Math.abs(r.reduce((a, [x, y], i) => { const [x2, y2] = r[(i + 1) % r.length]; return a + x * y2 - x2 * y; }, 0)) / 2;
+
+describe('prepareExport: kerf', () => {
+  it('kerf 0.2 grows the outer bbox by 0.2 mm and shrinks the opening by 0.2 mm on each axis', () => {
+    for (const arc of [true, false]) {
+      const m = buildLayers({ arc }, ClipperLib);
+      const k0 = prepareExport(m, ClipperLib), k2 = prepareExport(m, ClipperLib, { kerf: 0.2 });
+      assert.ok(Math.abs(k2.derived.out_w - k0.derived.out_w - 0.2) <= 0.01, `arc ${arc}: out_w ${k0.derived.out_w} -> ${k2.derived.out_w}`);
+      assert.ok(Math.abs(k2.derived.out_h - k0.derived.out_h - 0.2) <= 0.01, `arc ${arc}: out_h ${k0.derived.out_h} -> ${k2.derived.out_h}`);
+      const opening = (e: typeof k0) => e.layers[0].regions[0].holes.reduce((a, b) => (ringArea(b) > ringArea(a) ? b : a));
+      const o0 = ringBounds([opening(k0)]), o2 = ringBounds([opening(k2)]);
+      assert.ok(Math.abs(o0.w - o2.w - 0.2) <= 0.01, `arc ${arc}: opening w ${o0.w} -> ${o2.w}`);
+      assert.ok(Math.abs(o0.h - o2.h - 0.2) <= 0.01, `arc ${arc}: opening h ${o0.h} -> ${o2.h}`);
+    }
+  });
+
+  it('kerf 0 is byte-identical to writing the cleaned layers directly', () => {
+    for (const [name, t] of Object.entries(TEMPLATES)) {
+      const m = buildLayers({ ...t.params }, ClipperLib);
+      const direct = { ...m, layers: cleaned(m.layers) }, prepared = prepareExport(m, ClipperLib, { kerf: 0 });
+      assert.equal(stackSVG(prepared), stackSVG(direct), `${name}: SVG`);
+      assert.equal(stackDXF(prepared), stackDXF(direct), `${name}: DXF`);
+    }
+  });
+
+  it('rejects kerf outside 0..1 mm', () => {
+    const m = buildLayers({}, ClipperLib);
+    for (const kerf of [-0.1, 1.01, NaN]) assert.throws(() => prepareExport(m, ClipperLib, { kerf }), RangeError);
+  });
+
+  for (const [name, t] of Object.entries(TEMPLATES)) {
+    for (const arc of [true, false]) {
+      it(`kerf 0.2 output stays valid: ${name} (arc: ${arc})`, () => {
+        const e = prepareExport(buildLayers({ ...t.params, arc }, ClipperLib), ClipperLib, { kerf: 0.2 });
+        for (const l of e.layers) {
+          assert.ok(l.regions.length > 0, `${l.name}: empty after kerf`);
+          for (const r of l.regions) [r.outer, ...r.holes].forEach((ring) => assertCleanRing(ring, l.name));
+        }
+        const svg = stackSVG(e);
+        assertWellFormed(svg);
+        const [, vw, vh] = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/) ?? [];
+        assert.ok(Math.abs(+vw - e.derived.out_w) <= 0.01 && Math.abs(+vh - e.derived.out_h) <= 0.01, `viewBox ${vw}x${vh}`);
+        const d = parseDXF(stackDXF(e));
+        const vs = d.polylines.flatMap((pl) => pl.vertices);
+        assert.ok(Math.min(...vs.map(([x]) => x)) >= -0.01 && Math.min(...vs.map(([, y]) => y)) >= -0.01, 'DXF vertex below origin');
+        assert.ok(Math.abs(Math.max(...vs.map(([x]) => x)) - e.derived.out_w) <= 0.01, 'DXF width');
+        assert.ok(Math.abs(Math.max(...vs.map(([, y]) => y)) - e.derived.out_h) <= 0.01, 'DXF height');
+      });
+    }
+  }
+});
+
+describe('exportWarnings', () => {
+  it('warns for lace_w 0.3 with kerf 0.2', () => {
+    const w = exportWarnings(buildLayers({ lace_w: 0.3 }, ClipperLib), 0.2);
+    assert.deepEqual(w.map((x) => [x.layer, x.feature]), [['L6 lace', 'lace outline']]);
+    assert.match(w[0].message, /0\.3 mm.*0\.4 mm/);
+  });
+
+  it('is silent for the defaults with kerf 0.1, and for any design with kerf 0', () => {
+    assert.deepEqual(exportWarnings(buildLayers({}, ClipperLib), 0.1), []);
+    for (const t of Object.values(TEMPLATES)) assert.deepEqual(exportWarnings(buildLayers({ ...t.params, lace_w: 0.3 }, ClipperLib), 0), []);
+  });
+
+  it('flags rims on both pattern layers, skips features that are off, and ignores layout none', () => {
+    const w = exportWarnings(buildLayers({ rim_w: 0, inner_rim_w: 1 }, ClipperLib), 0.5);
+    assert.deepEqual(w.map((x) => `${x.layer}/${x.feature}`), ['L5 motif/inner rim', 'L6 lace/inner rim', 'L6 lace/lace outline']);
+    assert.deepEqual(exportWarnings(buildLayers({ ...TEMPLATES['Plain Terraces'].params }, ClipperLib), 1), []);
   });
 });

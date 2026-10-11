@@ -16,8 +16,7 @@
 
 | # | Title | Status |
 |---|-------|--------|
-| 3 | Core: DXF R12 writer | in progress (`feature/3-dxf-writer`) |
-| 4 | Kerf compensation + thin-feature warnings | planning |
+| 4 | Kerf compensation + thin-feature warnings | in progress (`feature/4-kerf-warnings`) |
 | 5 | API + MCP: `/api/export format=svg\|dxf` | planning |
 | 6 | UI: laser / CNC export buttons | planning |
 
@@ -28,6 +27,7 @@
 - **2026-10-11** — PR #12 merged (closes #10): hardened CI, green.
 - **2026-10-11** — PR #13 merged (closes #2): `cleanRegions` + SVG writer. GitHub hadn't synced the PR head yet, so the merge used `dc843b3` and left out the stroke-mode commit `03b1e64`. That commit is being re-landed in a follow-up PR.
 - **2026-10-11** — PR #14 merged: re-landed the `'cut'` stroke mode (`18216b2`). It was the first PR under the required check. Afterward, auto-delete of head branches was turned on and all merged local and remote branches were deleted.
+- **2026-10-11** — PR #15 merged (closes #3): DXF R12 writer (`4dc6232`).
 
 ---
 
@@ -68,6 +68,15 @@
   - Layer names are sanitized to `[A-Za-z0-9_-]`, max 31 characters.
   - Verified: `uvx ezdxf audit` reports no errors on 16 sample files. An `ezdxf` read gives units 4 (mm), all polylines closed, and extents of 141.600 × 243.200 mm. Inkscape 1.3.2 imports it at the right mm size with one color per layer.
   - LibreCAD isn't installed, so it hasn't been checked.
+- **2026-10-11** — #4 kerf:
+  - Kerf is applied in `prepareExport(model, ClipperLib, { kerf, tol })`, not as a writer option as the issue said. Kerf needs Clipper and changes the bbox, and the writers have neither. The writers stay pure formatting.
+  - Steps: clean, then `ops.offset(+kerf/2, round)`, `toRegions`, clean again, then recompute bbox/out_w/out_h.
+  - kerf 0 keeps `model.derived`, so the output is byte-identical (tested).
+  - kerf range 0–1 mm; anything else throws a `RangeError`.
+- **2026-10-11** — #4 warnings: `exportWarnings(model, kerf)` uses the design params, as specified: rims on the motif and lace layers, `lace_w` on the lace layer. It flags any width ≤ 2 × kerf and skips features set to 0.
+  - The daisy "lens" shapes turned out to be **holes** (432 on the default L6 lace, all narrower than 0.2 mm), not islands. No template has vanishing islands.
+  - Kerf ≥ 0.1 closes all 432 (lace holes go from 686 to 254), the same as on the machine, so they aren't warned about.
+  - At kerf 0 they stay. A possible geometry fix is to drop sub-kerf lace slivers in `buildLayers`.
 - **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
 
 ## Open Questions / Blockers
