@@ -52,6 +52,7 @@ src/ui/index.html         UI shell; Vite root
 src/ui/styles.css         CSS variables; light + dark via prefers-color-scheme (imported from app.ts)
 src/ui/app.ts             three.js viewer, parameter panel, template gallery, live sync
 src/ui/thumb.ts           top-view SVG of a built frame (template thumbnails)
+.github/workflows/ci.yml  PR check: npm ci, typecheck, npm test
 test/core.test.ts         node:test suite for the core (templates x arc, applyPatch, migrate)
 vite.config.ts            root src/ui, outDir dist/
 tsconfig.json             strict, noEmit, allowImportingTsExtensions, erasableSyntaxOnly
@@ -94,7 +95,7 @@ state.json, exports/, dist/   runtime / build output (gitignored)
 
 ## Testing
 
-Tests use `node:test` + `node:assert` (no framework dependency) and live in `test/*.test.ts`. Before handing back a change:
+Tests use `node:test` + `node:assert` (no framework dependency) and live in `test/*.test.ts`. CI (`.github/workflows/ci.yml`) runs `npm ci --ignore-scripts`, `npm run typecheck` and `npm test` on every PR, under Harden-Runner with blocked egress. Read the security notes at the top of that file before you edit it, and lint it with `uvx zizmor --persona=pedantic .github/workflows/ci.yml`. Before handing back a change:
 
 1. Run `npm run typecheck`.
 2. Run `npm test`. `test/core.test.ts` builds every template with `arc` both on and off and asserts that the layer count is right, no layer is empty, and `out_w`/`out_h` exceed the opening. It also covers `applyPatch` and `migrate`. When you add a template, it's covered automatically. Add cases for new core behavior.

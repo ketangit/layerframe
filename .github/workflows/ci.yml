@@ -1,0 +1,57 @@
+# PR check: typecheck + tests.
+#
+# Security notes:
+# - Trigger is `pull_request` only. Never `pull_request_target` or `workflow_run`:
+#   they run with a write token and secrets against untrusted PR code.
+# - No `${{ github.event.* }}` (PR title, branch name, body, ...) in `run:` steps.
+#   If one is ever needed, pass it through `env:` and quote it as "$VAR".
+# - Token is read-only and not persisted to .git/config; dependency install scripts are disabled.
+# - Harden-Runner blocks egress to anything outside the allowlist and reports
+#   network/process/file activity (link in the job summary).
+# - Actions are pinned to full commit SHAs; bump them deliberately.
+name: CI
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            raw.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            nodejs.org:443
+            registry.npmjs.org:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
