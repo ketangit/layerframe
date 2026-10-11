@@ -1,4 +1,4 @@
-// LayerFrame Studio — 2D vector export (laser / CNC).
+// LayerFrame — 2D vector export (laser / CNC).
 // Each layer's regions are already its exact cut footprint, so there's no slicing:
 // clean the rings, then write them as mm-unit SVG or DXF R12. Runs in the browser and in Node.
 import type { Bounds, Clipper, Layer, Model, Params, Region, Ring } from './frame-core.ts';

@@ -1,4 +1,4 @@
-// LayerFrame Studio — MCP server (stdio).
+// LayerFrame — MCP server (stdio).
 // Thin wrapper over the local HTTP API, so every tweak an AI makes shows up live in the open browser UI.
 // Start the app first:  npm start      then register this file with your MCP client (see README).
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -22,7 +22,7 @@ async function api<T = unknown>(path: string, opts: RequestInit = {}): Promise<T
 const ok = (obj: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(obj, null, 2) }] });
 const patch = (p: Patch) => api<StateResponse>('/api/state', { method: 'PATCH', body: JSON.stringify({ patch: p }) });
 
-const server = new McpServer({ name: 'layerframe-studio', version: '1.0.0' });
+const server = new McpServer({ name: 'layerframe', version: '1.0.0' });
 
 server.tool('get_schema', 'List every tweakable parameter with type, unit, range and defaults.', {},
   async () => ok(await api('/api/schema')));

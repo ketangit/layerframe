@@ -1,4 +1,4 @@
-# LayerFrame Studio
+# LayerFrame
 
 A local web app that generates parametric multi-layer colour picture frames for Bambu Lab AMS printing. Each Z layer is one filament: a base, stepped terraces, a solid motif layer and a lace-outline top layer. It designs **one frame at a time**. It's an independent, LayerStudio-style implementation and must not copy LayerStudio code or artwork.
 
@@ -18,7 +18,7 @@ A local web app that generates parametric multi-layer colour picture frames for 
 
 Notes:
 - PLAN.md's libraries (`@jscad/modeling`, Maker.js, three-mesh-bvh, Clipper2) are candidates, not mandates. Add a dependency only when an issue needs it, and justify it in that issue.
-- PLAN.md says "LayerStudio", but this project is still **LayerFrame Studio**, an independent implementation. The no-copy rule above still applies.
+- PLAN.md says "LayerStudio", but this project is still **LayerFrame**, an independent implementation. The no-copy rule above still applies.
 
 ## Commands (Windows Terminal / PowerShell)
 

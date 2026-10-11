@@ -1,4 +1,4 @@
-// LayerFrame Studio — geometry core.
+// LayerFrame — geometry core.
 // Pure functions: parameters -> per-layer 2D regions (polygons with holes).
 // Runs in the browser and in Node (server / MCP). ClipperLib is injected.
 // All units are millimetres. Y is "up the frame", X is width.
