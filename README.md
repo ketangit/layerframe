@@ -72,6 +72,7 @@ Open the URL. You can:
 - export:
   - **3MF**: one object with one part per layer. In Bambu Studio, answer "Yes" to "load as a single object with multiple parts", then assign a filament to each part.
   - **STL**: merged, or one file per layer (zip).
+  - **Laser / CNC**: **SVG** or **DXF** (R12) of the whole stack, in mm, with one SVG group / DXF layer and one colour per frame layer, or **SVG per layer** (zip). Set **Kerf (mm)** to grow each part by half the kerf so it cuts at true size. The panel warns when a rim or the lace outline is no wider than 2 × kerf. The kerf is remembered in your browser and isn't part of the frame state.
 
 Files are named after the template, for example `Lace_Daisies.3mf`.
 

@@ -8,6 +8,8 @@ import type { FieldSpec, Patch, State } from '../core/frame-core.ts';
 import { frameSVG } from './thumb.ts';
 import { buildFrame, effectiveParams, build3MF, geometryToSTL } from '../core/mesh.ts';
 import type { Frame } from '../core/mesh.ts';
+import { KERF_MAX, export2DFor, exportWarnings } from '../core/vector.ts';
+import type { Format2D } from '../core/vector.ts';
 import './styles.css';
 
 declare global {
@@ -106,6 +108,7 @@ function rebuild() {
   if (firstFit || size !== lastSize) { setCam(currentCam); firstFit = false; lastSize = size; }
   dirty = true;
   renderPanel(fb);
+  updateKerfWarn();
   scheduleThumbs();
   $('#status').textContent = `rebuilt in ${Math.round(performance.now() - t0)} ms`;
 }
@@ -327,7 +330,36 @@ $('#expLayers').onclick = async () => {
   build().layers.forEach((L, i) => zip.file(`${baseName()}_L${i + 1}_${L.kind}.stl`, geometryToSTL([{ geometry: L.geometry, offset: [0, 0, L.z0] }])));
   download(await zip.generateAsync({ type: 'blob' }), `${baseName()}_layers.zip`);
 };
-$('#copyJson').onclick = () => navigator.clipboard.writeText(JSON.stringify(state, null, 2));
+// Laser / CNC: same writers as /api/export, run client-side (works offline too).
+// Kerf is a machine setting, so it's remembered per browser rather than stored in the frame state.
+const KERF_KEY = 'layerframe.kerf';
+const kerfInput = $<HTMLInputElement>('#kerf');
+const kerf = () => {
+  const v = Number(kerfInput.value);
+  return Number.isFinite(v) ? Math.min(KERF_MAX, Math.max(0, v)) : 0;
+};
+try { const saved = localStorage.getItem(KERF_KEY); if (saved !== null) kerfInput.value = String(Number(saved) || 0); } catch {}
+function updateKerfWarn() {
+  const w = exportWarnings(build().model, kerf()), el = $('#kerfWarn');
+  el.hidden = w.length === 0;
+  el.textContent = w.map((x) => x.message).join(' ');
+}
+kerfInput.oninput = () => updateKerfWarn();
+kerfInput.onchange = () => {
+  kerfInput.value = String(kerf());
+  try { localStorage.setItem(KERF_KEY, kerfInput.value); } catch {}
+  updateKerfWarn();
+};
+async function export2D(format: Format2D, split = false) {
+  const r = await export2DFor(effectiveParams(state), ClipperLib, JSZip, { format, base: baseName(), kerf: kerf(), split });
+  download(r.data, r.filename);
+  $('#status').textContent = r.warnings.length ? `${r.filename}: ${r.warnings.map((w) => w.message).join(' ')}` : `exported ${r.filename}`;
+}
+$('#expSvg').onclick = () => export2D('svg');
+$('#expDxf').onclick = () => export2D('dxf');
+$('#expSvgLayers').onclick = () => export2D('svg', true);
+
+$('#copyJson').onclick =() => navigator.clipboard.writeText(JSON.stringify(state, null, 2));
 $('#reset').onclick = async () => {
   if (online) await fetch('./api/reset', { method: 'POST' });
   else { state = defaultState(); rebuild(); }
