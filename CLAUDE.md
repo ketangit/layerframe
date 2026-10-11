@@ -2,6 +2,22 @@
 
 A local web app that generates parametric multi-layer colour picture frames for Bambu Lab AMS printing. Each Z layer is one filament: a base, stepped terraces, a solid motif layer and a lace-outline top layer. It designs **one frame at a time**. It's an independent, LayerStudio-style implementation and must not copy LayerStudio code or artwork.
 
+## Planning workflow (new features)
+
+`PLAN.md` holds the product direction and the mandatory workflow. Read it before planning a feature.
+
+1. **Plan first.** Write an incremental plan in which each step is the smallest PR that still makes sense on its own.
+2. **Draft one GitHub issue per step** with Goal, Technical approach, Acceptance criteria and Out of scope (see `.github/ISSUE_TEMPLATE/feature.md`). Use the repo labels: `epic`, `feature`, `geometry`, `export`, `ui`, `api-mcp`, `testing`, `chore`.
+3. **STOP for review.** Create the issues with `gh issue create` only after Ketan approves the plan. Write no code until he says go.
+4. **Implement one issue at a time.**
+   - Branch: `feature/<issue#>-<slug>` off `main`.
+   - Pass every Testing step below.
+   - Open a PR into `main` with `gh pr create`, with `Closes #N` in the body.
+
+Notes:
+- PLAN.md's libraries (`@jscad/modeling`, Maker.js, three-mesh-bvh, Clipper2) are candidates, not mandates. Add a dependency only when an issue needs it, and justify it in that issue.
+- PLAN.md says "LayerStudio", but this project is still **LayerFrame Studio**, an independent implementation. The no-copy rule above still applies.
+
 ## Commands (Windows Terminal / PowerShell)
 
 ```powershell
