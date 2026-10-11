@@ -16,8 +16,7 @@
 
 | # | Title | Status |
 |---|-------|--------|
-| 5 | API + MCP: `/api/export format=svg\|dxf` | in progress (`feature/5-export-api`) |
-| 6 | UI: laser / CNC export buttons | planning |
+| 6 | UI: laser / CNC export buttons | in progress (`feature/6-laser-export-ui`) |
 
 ## Done
 
@@ -29,6 +28,7 @@
 - **2026-10-11** — PR #15 merged (closes #3): DXF R12 writer (`4dc6232`).
 - **2026-10-11** — PR #16 merged (closes #4): `prepareExport` (kerf) and `exportWarnings` (`baa9261`).
 - **2026-10-11** — PR #18 merged (closes #17): Vite `hmr.server` → `ws.server`; the deprecation warning is gone.
+- **2026-10-11** — PR #19 merged (closes #5): `/api/export` svg|dxf with layer / split / kerf, the MCP `export` tool, and `export2DFor` (`c4a26e3`).
 
 ---
 
@@ -82,6 +82,12 @@
   - Bad options throw `RangeError`, and the server maps `RangeError` to 400.
   - File names: `<base>[_kerfK].svg|dxf`, `<base>_L1_base[_kerfK].<fmt>`, `<base>[_kerfK]_<fmt>_layers.zip`.
   - With `save=1`, the JSON includes `warnings`. Downloads don't carry warnings; the #6 UI can call `exportWarnings` in the browser.
+- **2026-10-11** — #6 UI: the Laser / CNC row calls `export2DFor` client-side, so it works offline and matches the API byte for byte.
+  - Kerf is stored in `localStorage` under `layerframe.kerf` (try/catch), clamped to 0–1 on change.
+  - The `#kerfWarn` hint updates live, both on kerf input and on every rebuild, so design changes like `lace_w` update it. `#status` shows the warnings after an export.
+  - Added a `--warn` color token: #a4421a light (≈6:1 on the panel), #f0a36b dark (≈8:1).
+  - The zip is named `<Template>_svg_layers.zip` (from #5), not `_layers_svg.zip` as the issue said.
+- **2026-10-11** — UI testing gotcha: a click-through on the test server writes the real `state.json` through the live sync. Back it up first and restore it afterward (CLAUDE.md already says this). It happened during the #6 check and was restored from the backup.
 - **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
 
 ## Open Questions / Blockers
