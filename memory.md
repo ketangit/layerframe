@@ -16,7 +16,7 @@
 
 | # | Title | Status |
 |---|-------|--------|
-| 10 | CI: GitHub Actions runs typecheck + `npm test` on every PR | in review (`chore/10-ci-workflow`) |
+| 10 | CI: GitHub Actions runs typecheck + `npm test` on every PR | in review — PR #12 (`chore/10-ci-workflow`), CI green |
 | 2 | Core: region cleanup + SVG writer | planning |
 | 3 | Core: DXF R12 writer | planning |
 | 4 | Kerf compensation + thin-feature warnings | planning |
@@ -46,6 +46,7 @@
   - 10-minute timeout.
   - Lint with `uvx zizmor --persona=pedantic` and actionlint.
 - **2026-10-11** — Harden-Runner v2.22.1 (StepSecurity Community tier, free for public repos on GitHub-hosted Linux runners) runs with `egress-policy: block`, an endpoint allowlist and sudo/containers disabled. Telemetry stays on so the insights page works.
+- **2026-10-11** — Egress allowlist verified on PR #12 run 38111853482: Node 24.17.0 download, `npm ci` and the npm cache save all succeeded with block on, and nothing was blocked.
 - **2026-10-11** — Repo Actions settings (applied via `gh api`, then read back to confirm):
   - Default `GITHUB_TOKEN` is `read` and can't approve PRs. This was already the case.
   - `allowed_actions: selected`: GitHub-owned actions plus `step-security/harden-runner@*`. Not `verified_allowed`. A new third-party action has to be added to this allowlist first.
@@ -54,6 +55,5 @@
 
 ## Open Questions / Blockers
 
-- The egress allowlist hasn't been run on GitHub yet. Check the first PR run's Harden-Runner insights for blocked calls and adjust the list.
 - After #10 merges: optionally make `CI / Typecheck + tests` a required status check (manual, in repo settings).
 - Dependabot for `github-actions`, to keep the pinned SHAs current: candidate `chore` issue.
