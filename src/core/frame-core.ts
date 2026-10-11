@@ -202,8 +202,8 @@ export function layerCount(p: Pick<Params, 'base_layers' | 'layout'>): number {
 }
 
 // ---------- polygon helpers (Clipper works in integer space) ----------
-const S = 1000;
-const toC = (pts: Ring): CPath => pts.map(([x, y]) => ({ X: Math.round(x * S), Y: Math.round(y * S) }));
+export const S = 1000;
+export const toC = (pts: Ring): CPath => pts.map(([x, y]) => ({ X: Math.round(x * S), Y: Math.round(y * S) }));
 
 function circle(cx: number, cy: number, r: number, seg?: number): Ring {
   const n = seg || Math.max(24, Math.min(96, Math.round(r * 6)));

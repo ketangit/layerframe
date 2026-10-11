@@ -16,8 +16,7 @@
 
 | # | Title | Status |
 |---|-------|--------|
-| 10 | CI: GitHub Actions runs typecheck + `npm test` on every PR | in review — PR #12 (`chore/10-ci-workflow`), CI green |
-| 2 | Core: region cleanup + SVG writer | planning |
+| 2 | Core: region cleanup + SVG writer | in progress (`feature/2-svg-writer`) |
 | 3 | Core: DXF R12 writer | planning |
 | 4 | Kerf compensation + thin-feature warnings | planning |
 | 5 | API + MCP: `/api/export format=svg\|dxf` | planning |
@@ -27,6 +26,7 @@
 
 - **2026-10-11** — PR #9 merged: adopted PLAN.md planning workflow.
 - **2026-10-11** — PR #11 merged (closes #1): `npm test` with `node:test`, 22 core tests.
+- **2026-10-11** — PR #12 merged (closes #10): hardened CI, green.
 
 ---
 
@@ -52,8 +52,9 @@
   - `allowed_actions: selected`: GitHub-owned actions plus `step-security/harden-runner@*`. Not `verified_allowed`. A new third-party action has to be added to this allowlist first.
   - `sha_pinning_required: true`.
   - Fork PR runs need approval for all external contributors.
+- **2026-10-11** — #2: `cleanRegions` uses Clipper `CleanPolygon` (tol 0.01 mm) and drops rings under 0.01 mm². Across all templates × arc it removes 4.4% of points and 2 of 5,630 rings, and changes any layer's area by at most 0.028%. Cleaning applies to 2D export only; 3MF keeps the raw regions. Colors and layer names are XML-escaped in the SVG.
 
 ## Open Questions / Blockers
 
-- After #10 merges: optionally make `CI / Typecheck + tests` a required status check (manual, in repo settings).
+- `Typecheck + tests` isn't a required check on `main` yet. The full branch-protection PUT was blocked by the Claude Code permission classifier, so Ketan needs to run it himself.
 - Dependabot for `github-actions`, to keep the pinned SHAs current: candidate `chore` issue.
