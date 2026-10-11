@@ -34,8 +34,23 @@ function regionPath(r: Region, b: Bounds): string {
     .join('');
 }
 
-function layerPaths(layer: Layer, b: Bounds): string {
-  const attrs = `fill="none" fill-rule="evenodd" stroke="${esc(layer.color)}" stroke-width="${HAIRLINE}"`;
+// Stroke colour per layer:
+// - 'cut' (default): a fixed high-contrast colour per layer index. Laser software such as LightBurn
+//   assigns cut layers by stroke colour, so layers that share a filament colour would otherwise merge.
+//   12 colours = the most layers a frame can have (10 terraces + 2 pattern layers).
+// - 'filament': the layer's filament colour, for a preview that matches the print.
+export type StrokeMode = 'cut' | 'filament';
+export interface SVGOptions { stroke?: StrokeMode }
+export const CUT_COLORS = [
+  '#000000', '#0000ff', '#ff0000', '#00a000', '#ff8000', '#00c0c0',
+  '#ff00ff', '#808000', '#000080', '#800000', '#008080', '#800080',
+] as const;
+
+const strokeOf = (layer: Layer, mode: StrokeMode) =>
+  mode === 'filament' ? layer.color : CUT_COLORS[layer.index % CUT_COLORS.length];
+
+function layerPaths(layer: Layer, b: Bounds, mode: StrokeMode): string {
+  const attrs = `fill="none" fill-rule="evenodd" stroke="${esc(strokeOf(layer, mode))}" stroke-width="${HAIRLINE}"`;
   return layer.regions.map((r) => `<path ${attrs} d="${regionPath(r, b)}"/>`).join('\n');
 }
 
@@ -46,16 +61,17 @@ function svgOpen(b: Bounds, extraNs = ''): string {
 
 // One layer as a standalone SVG. `bbox` is the whole frame's (model.derived.bbox), so every
 // layer file shares one origin and the cut sheets line up.
-export function layerSVG(layer: Layer, bbox: Bounds): string {
-  return `${svgOpen(bbox)}\n${layerPaths(layer, bbox)}\n</svg>\n`;
+export function layerSVG(layer: Layer, bbox: Bounds, { stroke = 'cut' }: SVGOptions = {}): string {
+  return `${svgOpen(bbox)}\n${layerPaths(layer, bbox, stroke)}\n</svg>\n`;
 }
 
-// Every layer in one SVG, each in an Inkscape layer group (LightBurn and Inkscape split on these).
-export function stackSVG(model: Pick<Model, 'layers' | 'derived'>): string {
+// Every layer in one SVG, each in an Inkscape layer group. The label carries the filament colour,
+// so it's still visible in 'cut' mode.
+export function stackSVG(model: Pick<Model, 'layers' | 'derived'>, { stroke = 'cut' }: SVGOptions = {}): string {
   const b = model.derived.bbox;
   const groups = model.layers.map((L) => {
-    const id = esc(L.name.replace(/\s+/g, '-')), label = esc(L.name);
-    return `<g id="${id}" inkscape:groupmode="layer" inkscape:label="${label}">\n${layerPaths(L, b)}\n</g>`;
+    const id = esc(L.name.replace(/\s+/g, '-')), label = esc(`${L.name} (${L.color})`);
+    return `<g id="${id}" inkscape:groupmode="layer" inkscape:label="${label}">\n${layerPaths(L, b, stroke)}\n</g>`;
   });
   return `${svgOpen(b, ' xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"')}\n${groups.join('\n')}\n</svg>\n`;
 }

@@ -16,7 +16,7 @@
 
 | # | Title | Status |
 |---|-------|--------|
-| 2 | Core: region cleanup + SVG writer | in progress (`feature/2-svg-writer`) |
+| 2 (follow-up) | SVG `cut` stroke mode, left out of PR #13 | fix ready (`fix/2-svg-cut-stroke-mode`) |
 | 3 | Core: DXF R12 writer | planning |
 | 4 | Kerf compensation + thin-feature warnings | planning |
 | 5 | API + MCP: `/api/export format=svg\|dxf` | planning |
@@ -27,6 +27,7 @@
 - **2026-10-11** — PR #9 merged: adopted PLAN.md planning workflow.
 - **2026-10-11** — PR #11 merged (closes #1): `npm test` with `node:test`, 22 core tests.
 - **2026-10-11** — PR #12 merged (closes #10): hardened CI, green.
+- **2026-10-11** — PR #13 merged (closes #2): `cleanRegions` + SVG writer. GitHub hadn't synced the PR head yet, so the merge used `dc843b3` and left out the stroke-mode commit `03b1e64`. That commit is being re-landed in a follow-up PR.
 
 ---
 
@@ -52,9 +53,15 @@
   - `allowed_actions: selected`: GitHub-owned actions plus `step-security/harden-runner@*`. Not `verified_allowed`. A new third-party action has to be added to this allowlist first.
   - `sha_pinning_required: true`.
   - Fork PR runs need approval for all external contributors.
+- **2026-10-11** — `main` branch protection now requires `Typecheck + tests` with strict (up to date), plus the existing signed commits, linear history, admins enforced and conversation resolution. Ketan applied it with a full protection PUT (the Claude Code classifier blocked it for Claude). Read back afterward: signatures still on.
 - **2026-10-11** — #2: `cleanRegions` uses Clipper `CleanPolygon` (tol 0.01 mm) and drops rings under 0.01 mm². Across all templates × arc it removes 4.4% of points and 2 of 5,630 rings, and changes any layer's area by at most 0.028%. Cleaning applies to 2D export only; 3MF keeps the raw regions. Colors and layer names are XML-escaped in the SVG.
+- **2026-10-11** — SVG stroke modes:
+  - `'cut'` (default): a fixed 12-color high-contrast palette, one color per layer index. 12 is the maximum layer count. Laser software like LightBurn assigns cut layers by stroke color, and filament colors repeat across layers (the default palette reuses 2), so stroking by filament color would merge layers.
+  - `'filament'`: strokes in the layer's filament color, for previews that match the print.
+  - In both modes the layer label carries the filament color.
+  - The hairline stays 0.01 mm, so it looks faint in Inkscape's normal view. Use Outline view to inspect it.
+- **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
 
 ## Open Questions / Blockers
 
-- `Typecheck + tests` isn't a required check on `main` yet. The full branch-protection PUT was blocked by the Claude Code permission classifier, so Ketan needs to run it himself.
 - Dependabot for `github-actions`, to keep the pinned SHAs current: candidate `chore` issue.
