@@ -61,6 +61,7 @@ npm start            # dev: API + Vite (HMR) on http://localhost:5317
 npm run build        # type-check (tsc) + Vite production build into dist/
 npm run serve        # serve dist/ + API on http://localhost:5317
 npm run typecheck    # tsc only
+npm test             # core tests (node:test)
 ```
 
 Open the URL. You can:

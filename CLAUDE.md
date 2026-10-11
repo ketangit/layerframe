@@ -24,6 +24,7 @@ Notes:
 npm install                 # once; node >= 24.17.0 (see .nvmrc)
 npm start                   # dev: API + Vite middleware (HMR) at http://localhost:5317  (PORT env var to change)
 npm run typecheck           # tsc (TypeScript 7), no emit
+npm test                    # node:test core tests (test/*.test.ts)
 npm run build               # typecheck + vite build -> dist/
 npm run serve               # prod: API + static dist/ (node server.ts --prod)
 npm run mcp                 # MCP stdio server; needs `npm start` running
@@ -49,6 +50,7 @@ src/ui/index.html         UI shell; Vite root
 src/ui/styles.css         CSS variables; light + dark via prefers-color-scheme (imported from app.ts)
 src/ui/app.ts             three.js viewer, parameter panel, template gallery, live sync
 src/ui/thumb.ts           top-view SVG of a built frame (template thumbnails)
+test/core.test.ts         node:test suite for the core (templates x arc, applyPatch, migrate)
 vite.config.ts            root src/ui, outDir dist/
 tsconfig.json             strict, noEmit, allowImportingTsExtensions, erasableSyntaxOnly
 state.json, exports/, dist/   runtime / build output (gitignored)
@@ -90,19 +92,10 @@ state.json, exports/, dist/   runtime / build output (gitignored)
 
 ## Testing
 
-There's no test framework yet. Before handing back a change:
+Tests use `node:test` + `node:assert` (no framework dependency) and live in `test/*.test.ts`. Before handing back a change:
 
 1. Run `npm run typecheck`.
-2. Run a headless smoke test of the core across every template, for example in a scratch `.ts` file in the repo root (run with `node smoke.ts`, then delete it):
-   ```ts
-   import ClipperLib from 'clipper-lib';
-   import { TEMPLATES, buildLayers } from './src/core/frame-core.ts';
-   for (const [n, t] of Object.entries(TEMPLATES)) {
-     const m = buildLayers({ ...t.params }, ClipperLib);
-     console.log(n, m.derived.out_w, m.derived.out_h, m.layers.map(l => l.regions.length).join('/'));
-   }
-   ```
-   Every template must build, with no empty layers and with sensible `out_w`/`out_h`. Try it with `arc` both on and off.
+2. Run `npm test`. `test/core.test.ts` builds every template with `arc` both on and off and asserts that the layer count is right, no layer is empty, and `out_w`/`out_h` exceed the opening. It also covers `applyPatch` and `migrate`. When you add a template, it's covered automatically. Add cases for new core behavior.
 3. Check the API: `/api/model`, then `/api/export?format=3mf&save=1` and `format=stl&layer=0`.
 4. Run `npm run build`, open the UI, click through the templates and size presets, and confirm the browser console shows no errors.
    - Test servers on another `PORT` still read and write the real `state.json`. Back it up before driving the UI, and restore it afterward.

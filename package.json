@@ -10,7 +10,8 @@
     "build": "tsc -p . && vite build",
     "serve": "node server.ts --prod",
     "typecheck": "tsc -p .",
-    "mcp": "node mcp/server.ts"
+    "mcp": "node mcp/server.ts",
+    "test": "node --test \"test/**/*.test.ts\""
   },
   "keywords": [],
   "author": "",
