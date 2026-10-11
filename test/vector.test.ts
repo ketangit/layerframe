@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import ClipperLib from 'clipper-lib';
 import { PATTERN_LAYERS, SCHEMA, TEMPLATES, buildLayers } from '../src/core/frame-core.ts';
 import type { Layer, Region, Ring } from '../src/core/frame-core.ts';
-import { CUT_ACI, CUT_COLORS, cleanRegions, exportWarnings, layerDXF, layerSVG, prepareExport, stackDXF, stackSVG } from '../src/core/vector.ts';
+import JSZip from 'jszip';
+import { CUT_ACI, CUT_COLORS, cleanRegions, export2DFor, exportWarnings, layerDXF, layerSVG, prepareExport, stackDXF, stackSVG } from '../src/core/vector.ts';
 
 const TOL = 0.01;
 
@@ -329,5 +330,58 @@ describe('exportWarnings', () => {
     const w = exportWarnings(buildLayers({ rim_w: 0, inner_rim_w: 1 }, ClipperLib), 0.5);
     assert.deepEqual(w.map((x) => `${x.layer}/${x.feature}`), ['L5 motif/inner rim', 'L6 lace/inner rim', 'L6 lace/lace outline']);
     assert.deepEqual(exportWarnings(buildLayers({ ...TEMPLATES['Plain Terraces'].params }, ClipperLib), 1), []);
+  });
+});
+
+// ---------- export2DFor (what /api/export and MCP call) ----------
+describe('export2DFor', () => {
+  const dec = (u: Uint8Array) => new TextDecoder().decode(u);
+  const base = 'Lace_Daisies';
+
+  it('returns the whole stack by default, identical to the writers', async () => {
+    const m = buildLayers({}, ClipperLib), e = prepareExport(m, ClipperLib);
+    const svg = await export2DFor({}, ClipperLib, JSZip, { format: 'svg', base });
+    const dxf = await export2DFor({}, ClipperLib, JSZip, { format: 'dxf', base });
+    assert.equal(svg.filename, 'Lace_Daisies.svg');
+    assert.equal(dec(svg.data), stackSVG(e));
+    assert.equal(dxf.filename, 'Lace_Daisies.dxf');
+    assert.equal(dec(dxf.data), stackDXF(e));
+    assert.deepEqual(svg.warnings, []);
+  });
+
+  it('returns one layer with layer=N', async () => {
+    const m = buildLayers({}, ClipperLib), e = prepareExport(m, ClipperLib);
+    const r = await export2DFor({}, ClipperLib, JSZip, { format: 'dxf', base, layer: 0 });
+    assert.equal(r.filename, 'Lace_Daisies_L1_base.dxf');
+    assert.equal(dec(r.data), layerDXF(e.layers[0], e.derived.bbox));
+  });
+
+  it('returns a zip with one file per layer with split', async () => {
+    const r = await export2DFor({}, ClipperLib, JSZip, { format: 'svg', base, split: true });
+    assert.equal(r.filename, 'Lace_Daisies_svg_layers.zip');
+    const zip = await JSZip.loadAsync(r.data);
+    const names = Object.keys(zip.files).sort();
+    assert.deepEqual(names, ['L1_base', 'L2_terrace', 'L3_terrace', 'L4_terrace', 'L5_motif', 'L6_lace'].map((n) => `Lace_Daisies_${n}.svg`));
+    for (const n of names) assertWellFormed(await zip.file(n)!.async('string'));
+  });
+
+  it('applies kerf, tags the file name, and reports warnings', async () => {
+    const r = await export2DFor({ lace_w: 0.3 }, ClipperLib, JSZip, { format: 'dxf', base, kerf: 0.2 });
+    assert.equal(r.filename, 'Lace_Daisies_kerf0.2.dxf');
+    const e = prepareExport(buildLayers({ lace_w: 0.3 }, ClipperLib), ClipperLib, { kerf: 0.2 });
+    assert.equal(dec(r.data), stackDXF(e));
+    assert.deepEqual(r.warnings.map((w) => w.feature), ['lace outline']);
+    const z = await export2DFor({}, ClipperLib, JSZip, { format: 'svg', base, kerf: 0.1, split: true });
+    assert.ok(Object.keys((await JSZip.loadAsync(z.data)).files).every((n) => n.endsWith('_kerf0.1.svg')));
+  });
+
+  it('rejects bad options with RangeError', async () => {
+    const bad: Parameters<typeof export2DFor>[3][] = [
+      { format: 'svg', base, layer: 6 }, { format: 'svg', base, layer: -1 }, { format: 'svg', base, layer: 1.5 },
+      { format: 'svg', base, layer: NaN }, { format: 'svg', base, layer: 0, split: true },
+      { format: 'dxf', base, kerf: 2 }, { format: 'dxf', base, kerf: NaN },
+      { format: 'pdf' as 'svg', base },
+    ];
+    for (const o of bad) await assert.rejects(export2DFor({}, ClipperLib, JSZip, o), RangeError, JSON.stringify(o));
   });
 });

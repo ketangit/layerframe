@@ -45,11 +45,23 @@ server.tool('set_view', 'Exploded view on/off and layer gap in the browser.',
   { exploded: z.boolean().optional(), explode_gap: z.number().optional() },
   async (view) => ok((await patch({ view })).state.view));
 
-server.tool('export', 'Export the frame to ./exports. 3MF = one object with one part per layer (Bambu Studio). STL = merged, or one layer.',
-  { format: z.enum(['3mf', 'stl']).default('3mf'), layer: z.number().int().optional().describe('0-based layer index, STL only'), name: z.string().optional() },
-  async ({ format, layer, name }) => {
+server.tool('export',
+  'Export the frame to ./exports. 3MF = one object with one part per layer (Bambu Studio). STL = merged, or one layer. ' +
+  'SVG / DXF (R12) = 2D cut files for laser / CNC: the whole stack (one SVG group / DXF layer per frame layer), one layer, ' +
+  'or split into a zip with one file per layer. kerf (mm) grows each part by kerf/2 so it cuts at true size; ' +
+  'the result lists warnings for features too thin to survive that kerf.',
+  {
+    format: z.enum(['3mf', 'stl', 'svg', 'dxf']).default('3mf'),
+    layer: z.number().int().min(0).optional().describe('0-based layer index (STL, SVG, DXF)'),
+    split: z.boolean().optional().describe('SVG / DXF only: zip with one file per layer (not with layer)'),
+    kerf: z.number().min(0).max(1).optional().describe('SVG / DXF only: laser kerf in mm, 0-1'),
+    name: z.string().optional(),
+  },
+  async ({ format, layer, split, kerf, name }) => {
     const q = new URLSearchParams({ format, save: '1' });
     if (layer !== undefined) q.set('layer', String(layer));
+    if (split) q.set('split', '1');
+    if (kerf !== undefined) q.set('kerf', String(kerf));
     if (name) q.set('name', name);
     return ok(await api('/api/export?' + q));
   });
