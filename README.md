@@ -17,13 +17,12 @@ The app designs **one frame** at a time. The frame is sized from its inner openi
 
 | Button | Opening (mm) |
 |---|---|
-| A · 134×184 | 134 × 184 |
-| B · 184×210 | 184 × 210 |
-| 4×6 in | 101.6 × 152.4 |
+| 4×6 in (default) | 101.6 × 152.4 |
 | 5×7 in | 127 × 177.8 |
 | 8×10 in | 203.2 × 254 |
+| Custom | type W × H in mm |
 
-You can also type any opening size. Sizes are not limited to any printer bed.
+**Custom** shows width and height fields (mm) next to the buttons; it's highlighted whenever the opening doesn't match a preset. Sizes are not limited to any printer bed.
 
 ## Templates
 
