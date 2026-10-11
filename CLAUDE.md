@@ -6,6 +6,8 @@ A local web app that generates parametric multi-layer colour picture frames for 
 
 `PLAN.md` holds the product direction and the mandatory workflow. Read it before planning a feature.
 
+`memory.md` tracks status, open issues, decisions and blockers. Read it on session start, and update it whenever an issue or PR changes state.
+
 1. **Plan first.** Write an incremental plan in which each step is the smallest PR that still makes sense on its own.
 2. **Draft one GitHub issue per step** with Goal, Technical approach, Acceptance criteria and Out of scope (see `.github/ISSUE_TEMPLATE/feature.md`). Use the repo labels: `epic`, `feature`, `geometry`, `export`, `ui`, `api-mcp`, `testing`, `chore`.
 3. **STOP for review.** Create the issues with `gh issue create` only after Ketan approves the plan. Write no code until he says go.
