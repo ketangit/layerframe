@@ -134,7 +134,7 @@ if (!PROD) {
   const { createServer } = await import('vite');
   vite = await createServer({
     configFile: path.join(ROOT, 'vite.config.ts'),
-    server: { middlewareMode: true, hmr: { server } },
+    server: { middlewareMode: true, ws: { server } },
     appType: 'spa',
   });
 }
