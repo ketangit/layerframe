@@ -16,7 +16,7 @@
 
 | # | Title | Status |
 |---|-------|--------|
-| 4 | Kerf compensation + thin-feature warnings | in progress (`feature/4-kerf-warnings`) |
+| 17 | Chore: Vite `server.ws` option (deprecation) | in review (`chore/17-vite-ws-option`) |
 | 5 | API + MCP: `/api/export format=svg\|dxf` | planning |
 | 6 | UI: laser / CNC export buttons | planning |
 
@@ -28,6 +28,7 @@
 - **2026-10-11** — PR #13 merged (closes #2): `cleanRegions` + SVG writer. GitHub hadn't synced the PR head yet, so the merge used `dc843b3` and left out the stroke-mode commit `03b1e64`. That commit is being re-landed in a follow-up PR.
 - **2026-10-11** — PR #14 merged: re-landed the `'cut'` stroke mode (`18216b2`). It was the first PR under the required check. Afterward, auto-delete of head branches was turned on and all merged local and remote branches were deleted.
 - **2026-10-11** — PR #15 merged (closes #3): DXF R12 writer (`4dc6232`).
+- **2026-10-11** — PR #16 merged (closes #4): `prepareExport` (kerf) and `exportWarnings` (`baa9261`).
 
 ---
 
