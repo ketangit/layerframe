@@ -16,8 +16,7 @@
 
 | # | Title | Status |
 |---|-------|--------|
-| 17 | Chore: Vite `server.ws` option (deprecation) | in review (`chore/17-vite-ws-option`) |
-| 5 | API + MCP: `/api/export format=svg\|dxf` | planning |
+| 5 | API + MCP: `/api/export format=svg\|dxf` | in progress (`feature/5-export-api`) |
 | 6 | UI: laser / CNC export buttons | planning |
 
 ## Done
@@ -29,6 +28,7 @@
 - **2026-10-11** — PR #14 merged: re-landed the `'cut'` stroke mode (`18216b2`). It was the first PR under the required check. Afterward, auto-delete of head branches was turned on and all merged local and remote branches were deleted.
 - **2026-10-11** — PR #15 merged (closes #3): DXF R12 writer (`4dc6232`).
 - **2026-10-11** — PR #16 merged (closes #4): `prepareExport` (kerf) and `exportWarnings` (`baa9261`).
+- **2026-10-11** — PR #18 merged (closes #17): Vite `hmr.server` → `ws.server`; the deprecation warning is gone.
 
 ---
 
@@ -78,6 +78,10 @@
   - The daisy "lens" shapes turned out to be **holes** (432 on the default L6 lace, all narrower than 0.2 mm), not islands. No template has vanishing islands.
   - Kerf ≥ 0.1 closes all 432 (lace holes go from 686 to 254), the same as on the machine, so they aren't warned about.
   - At kerf 0 they stay. A possible geometry fix is to drop sub-kerf lace slivers in `buildLayers`.
+- **2026-10-11** — #5: the export logic lives in `export2DFor(params, ClipperLib, JSZip, { format, base, kerf, layer, split })` in `vector.ts` (pure, JSZip injected), so the API, MCP and the #6 UI share one path and it's unit-tested without a server.
+  - Bad options throw `RangeError`, and the server maps `RangeError` to 400.
+  - File names: `<base>[_kerfK].svg|dxf`, `<base>_L1_base[_kerfK].<fmt>`, `<base>[_kerfK]_<fmt>_layers.zip`.
+  - With `save=1`, the JSON includes `warnings`. Downloads don't carry warnings; the #6 UI can call `exportWarnings` in the browser.
 - **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
 
 ## Open Questions / Blockers

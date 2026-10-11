@@ -90,6 +90,7 @@ State is saved to `state.json`. An older multi-frame `state.json` is converted a
 | POST | `/api/template` `{"name":"Flower Garden"}` | apply a template (opening size kept) |
 | GET | `/api/model` | derived sizes + per-layer z / colour / area |
 | GET | `/api/export?format=3mf` | download (`format=stl&layer=5` for one layer; `name=` sets the file name; `save=1` writes to `./exports` and returns the path) |
+| GET | `/api/export?format=svg` / `format=dxf` | 2D cut files for laser / CNC (SVG, or DXF R12, in mm). Default: the whole stack, with one SVG group / DXF layer per frame layer. `layer=N` (0-based) for one layer; `split=1` for a zip of one file per layer; `kerf=0.1` (mm, 0–1) grows each part by kerf/2 so it cuts at true size. With `save=1` the JSON also lists `warnings` for features no wider than 2 × kerf. Bad `kerf` / `layer` returns 400. |
 | GET | `/api/events` | server-sent events stream of state changes |
 
 Examples:
@@ -100,6 +101,8 @@ curl -X PATCH localhost:5317/api/state -H "Content-Type: application/json" \
 curl -X PATCH localhost:5317/api/state -H "Content-Type: application/json" \
   -d '{"patch":{"params":{"arc":false}}}'
 curl "localhost:5317/api/export?format=3mf&save=1"
+curl "localhost:5317/api/export?format=svg&split=1" -o layers.zip     # one SVG per layer
+curl "localhost:5317/api/export?format=dxf&kerf=0.1&save=1"         # DXF, kerf-compensated, + warnings
 ```
 
 ## MCP server
@@ -112,7 +115,7 @@ curl "localhost:5317/api/export?format=3mf&save=1"
 - `set_params`
 - `set_layer_colors`
 - `set_view`
-- `export`
+- `export` (3MF, STL, and SVG / DXF with `layer`, `split`, `kerf`)
 - `list_templates`
 - `apply_template`
 - `reset`

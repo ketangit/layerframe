@@ -10,8 +10,8 @@
 //   GET    /api/schema                parameter schema, defaults, presets
 //   GET    /api/templates             template catalogue      POST /api/template {name}  apply one (sizes kept)
 //   GET    /api/model                 derived sizes + per-layer summary
-//   GET    /api/export?format=3mf|stl[&layer=0][&save=1]
-//          save=1 writes into ./exports and returns JSON {path}
+//   GET    /api/export?format=3mf|stl|svg|dxf[&layer=0][&save=1]   svg/dxf also: [&split=1 zip per layer][&kerf=mm]
+//          save=1 writes into ./exports and returns JSON {path, bytes} (+ warnings for svg/dxf)
 //   GET    /api/events                server-sent events: "state" on every change
 import http from 'node:http';
 import fs from 'node:fs';
@@ -22,6 +22,8 @@ import JSZip from 'jszip';
 import { SCHEMA, DEFAULTS, SIZE_PRESETS, TEMPLATES, defaultState, migrate, applyPatch, applyTemplate, buildLayers } from './src/core/frame-core.ts';
 import type { State } from './src/core/frame-core.ts';
 import { export3MFFor, exportSTLFor } from './src/core/mesh.ts';
+import { export2DFor } from './src/core/vector.ts';
+import type { ExportWarning } from './src/core/vector.ts';
 
 const ROOT = import.meta.dirname;
 const DIST = path.join(ROOT, 'dist');
@@ -97,15 +99,20 @@ const server = http.createServer(async (req, res) => {
       const fmt = (url.searchParams.get('format') || '3mf').toLowerCase();
       const layer = url.searchParams.has('layer') ? Number(url.searchParams.get('layer')) : null;
       const base = safe(url.searchParams.get('name') || state.params.template || 'frame');
-      let data: Uint8Array, fname: string;
+      let data: Uint8Array, fname: string, warnings: ExportWarning[] | undefined;
       if (fmt === '3mf') { data = await export3MFFor(state, ClipperLib, JSZip); fname = `${base}.3mf`; }
       else if (fmt === 'stl') { data = Buffer.from(exportSTLFor(state, ClipperLib, layer)); fname = `${base}${layer === null ? '' : `_L${layer + 1}`}.stl`; }
-      else return send(res, 400, { error: 'format must be 3mf or stl' });
+      else if (fmt === 'svg' || fmt === 'dxf') {
+        const kerf = url.searchParams.has('kerf') ? Number(url.searchParams.get('kerf')) : 0;
+        const split = url.searchParams.get('split') === '1';
+        ({ data, filename: fname, warnings } = await export2DFor(state.params, ClipperLib, JSZip, { format: fmt, base, kerf, layer, split }));
+      }
+      else return send(res, 400, { error: 'format must be 3mf, stl, svg or dxf' });
       if (url.searchParams.get('save') === '1') {
         fs.mkdirSync(EXPORTS, { recursive: true });
         const out = path.join(EXPORTS, fname);
         fs.writeFileSync(out, data);
-        return send(res, 200, { path: out, bytes: data.length });
+        return send(res, 200, { path: out, bytes: data.length, ...(warnings && { warnings }) });
       }
       res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="${fname}"` });
       return res.end(data);
@@ -126,7 +133,8 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' });
     fs.createReadStream(f).pipe(res);
   } catch (e) {
-    send(res, 500, { error: String(e instanceof Error ? e.message : e) });
+    // RangeError = bad request options (kerf, layer, split); anything else is a server fault.
+    send(res, e instanceof RangeError ? 400 : 500, { error: String(e instanceof Error ? e.message : e) });
   }
 });
 

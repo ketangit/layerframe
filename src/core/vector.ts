@@ -1,8 +1,11 @@
 // LayerFrame Studio — 2D vector export (laser / CNC).
 // Each layer's regions are already its exact cut footprint, so there's no slicing:
 // clean the rings, then write them as mm-unit SVG or DXF R12. Runs in the browser and in Node.
-import type { Bounds, Clipper, Layer, Model, Region, Ring } from './frame-core.ts';
-import { S, makeOps, toC } from './frame-core.ts';
+import type { Bounds, Clipper, Layer, Model, Params, Region, Ring } from './frame-core.ts';
+import type JSZipType from 'jszip';
+import { S, buildLayers, makeOps, toC } from './frame-core.ts';
+
+type JSZipCtor = typeof JSZipType; // injected, as in mesh.ts
 
 const HAIRLINE = 0.01; // mm; laser software treats this as a cut line
 
@@ -183,4 +186,38 @@ export function layerDXF(layer: Layer, bbox: Bounds): string {
 // Every layer in one DXF, one DXF layer per frame layer (L1_base, L2_terrace, ...).
 export function stackDXF(model: Pick<Model, 'layers' | 'derived'>): string {
   return dxf(model.layers, model.derived.bbox);
+}
+
+// ---------- one call for the API / MCP / UI: format + layer | split + kerf -> file ----------
+export type Format2D = 'svg' | 'dxf';
+export interface Export2DOptions {
+  format: Format2D; base: string; kerf?: number;
+  layer?: number | null; // one layer (0-based); otherwise the combined stack
+  split?: boolean;       // zip of one file per layer
+}
+export interface Export2DResult { data: Uint8Array; filename: string; warnings: ExportWarning[] }
+
+const layerFileName = (base: string, L: Layer) => `${base}_${L.name.replace(/[^\w.-]+/g, '_')}`;
+
+// Builds the frame, applies kerf and writes SVG/DXF. Bad options throw RangeError (the API maps it to 400).
+export async function export2DFor(params: Partial<Params>, ClipperLib: Clipper, JSZip: JSZipCtor, o: Export2DOptions): Promise<Export2DResult> {
+  const { format, base, kerf = 0, layer = null, split = false } = o;
+  if (format !== 'svg' && format !== 'dxf') throw new RangeError(`2D format must be svg or dxf, got ${format}`);
+  if (layer !== null && split) throw new RangeError('layer and split cannot be combined');
+  const model = buildLayers(params, ClipperLib);
+  const e = prepareExport(model, ClipperLib, { kerf });
+  if (layer !== null && !(Number.isInteger(layer) && layer >= 0 && layer < e.layers.length)) {
+    throw new RangeError(`layer must be an integer from 0 to ${e.layers.length - 1}, got ${layer}`);
+  }
+  const one = (L: Layer) => (format === 'svg' ? layerSVG(L, e.derived.bbox) : layerDXF(L, e.derived.bbox));
+  const tag = kerf > 0 ? `_kerf${kerf}` : '';
+  const enc = (s: string) => new TextEncoder().encode(s);
+  const warnings = exportWarnings(model, kerf);
+  if (split) {
+    const zip = new JSZip();
+    for (const L of e.layers) zip.file(`${layerFileName(base, L)}${tag}.${format}`, one(L));
+    return { data: await zip.generateAsync({ type: 'uint8array' }), filename: `${base}${tag}_${format}_layers.zip`, warnings };
+  }
+  if (layer !== null) return { data: enc(one(e.layers[layer])), filename: `${layerFileName(base, e.layers[layer])}${tag}.${format}`, warnings };
+  return { data: enc(format === 'svg' ? stackSVG(e) : stackDXF(e)), filename: `${base}${tag}.${format}`, warnings };
 }
