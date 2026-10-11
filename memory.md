@@ -53,6 +53,7 @@
   - `allowed_actions: selected`: GitHub-owned actions plus `step-security/harden-runner@*`. Not `verified_allowed`. A new third-party action has to be added to this allowlist first.
   - `sha_pinning_required: true`.
   - Fork PR runs need approval for all external contributors.
+- **2026-10-11** — `main` branch protection now requires `Typecheck + tests` with strict (up to date), plus the existing signed commits, linear history, admins enforced and conversation resolution. Ketan applied it with a full protection PUT (the Claude Code classifier blocked it for Claude). Read back afterward: signatures still on.
 - **2026-10-11** — #2: `cleanRegions` uses Clipper `CleanPolygon` (tol 0.01 mm) and drops rings under 0.01 mm². Across all templates × arc it removes 4.4% of points and 2 of 5,630 rings, and changes any layer's area by at most 0.028%. Cleaning applies to 2D export only; 3MF keeps the raw regions. Colors and layer names are XML-escaped in the SVG.
 - **2026-10-11** — SVG stroke modes:
   - `'cut'` (default): a fixed 12-color high-contrast palette, one color per layer index. 12 is the maximum layer count. Laser software like LightBurn assigns cut layers by stroke color, and filament colors repeat across layers (the default palette reuses 2), so stroking by filament color would merge layers.
@@ -63,5 +64,4 @@
 
 ## Open Questions / Blockers
 
-- `Typecheck + tests` isn't a required check on `main` yet. The full branch-protection PUT was blocked by the Claude Code permission classifier, so Ketan needs to run it himself.
 - Dependabot for `github-actions`, to keep the pinned SHAs current: candidate `chore` issue.
