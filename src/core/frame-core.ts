@@ -79,7 +79,7 @@ export const SCHEMA: Record<keyof Params, FieldSpec> = {
 };
 
 export const DEFAULTS: Params = {
-  in_w: 134, in_h: 184,
+  in_w: 101.6, in_h: 152.4, // 4×6 in
   shape: 'rect', border: 20, arc: true, corner_r: 12, scallop_d: 14, band_w: 8,
   layer_h: 1.5, base_layers: 4, step_w: 1.5,
   layout: 'band', motif: 'daisy', motif_mix: ['round', 'pointed', 'star'], accent: 'daisy',
@@ -92,8 +92,6 @@ export const DEFAULTS: Params = {
 
 // Quick opening sizes (the frame is always built from the inner opening + border)
 export const SIZE_PRESETS: Record<string, Pick<Params, 'in_w' | 'in_h'>> = {
-  'A · 134×184': { in_w: 134, in_h: 184 },
-  'B · 184×210': { in_w: 184, in_h: 210 },
   '4×6 in': { in_w: 101.6, in_h: 152.4 },
   '5×7 in': { in_w: 127, in_h: 177.8 },
   '8×10 in': { in_w: 203.2, in_h: 254 },

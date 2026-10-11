@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import ClipperLib from 'clipper-lib';
 import JSZip from 'jszip';
-import { TEMPLATES, SIZE_PRESETS, defaultState, migrate, applyPatch, applyTemplate, layerCount, schemaEntries } from '../core/frame-core.ts';
+import { TEMPLATES, SIZE_PRESETS, SCHEMA, defaultState, migrate, applyPatch, applyTemplate, layerCount, schemaEntries } from '../core/frame-core.ts';
 import type { FieldSpec, Patch, State } from '../core/frame-core.ts';
 import { frameSVG } from './thumb.ts';
 import { buildFrame, effectiveParams, build3MF, geometryToSTL } from '../core/mesh.ts';
@@ -24,6 +24,7 @@ const CLIENT = 'ui:' + Math.random().toString(36).slice(2, 8);
 
 let state = defaultState();
 let online = false;
+let customOpen = false;               // Custom size chosen even if W×H matches a preset
 const hidden = new Set<number>();     // hidden layer indices (view only)
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
 const $$ = <T extends HTMLElement = HTMLElement>(root: ParentNode, s: string) => root.querySelectorAll<T>(s);
@@ -162,12 +163,31 @@ function renderPanel(fb: Frame) {
   const sizes = $('#sizes');
   if (!sizes.dataset.ready) {
     sizes.dataset.ready = '1';
-    sizes.innerHTML = Object.keys(SIZE_PRESETS).map((n) => `<button data-size="${n}">${n}</button>`).join('');
-    $$(sizes, '[data-size]').forEach((b) => (b.onclick = () => change({ params: SIZE_PRESETS[b.dataset.size!] })));
+    const dim = (k: 'in_w' | 'in_h', label: string) => {
+      const s = SCHEMA[k] as { min: number; max: number; step: number };
+      return `<label>${label}<input type="number" data-custom="${k}" min="${s.min}" max="${s.max}" step="${s.step}"></label>`;
+    };
+    sizes.innerHTML = Object.keys(SIZE_PRESETS).map((n) => `<button data-size="${n}">${n}</button>`).join('')
+      + '<button data-size-custom>Custom</button>'
+      + `<div class="custom-size" hidden>${dim('in_w', 'W')}<span>×</span>${dim('in_h', 'H')}<span>mm</span></div>`;
+    $$(sizes, '[data-size]').forEach((b) => (b.onclick = () => { customOpen = false; change({ params: SIZE_PRESETS[b.dataset.size!] }); }));
+    sizes.querySelector<HTMLElement>('[data-size-custom]')!.onclick = () => { customOpen = true; renderPanel(fb); };
+    $$<HTMLInputElement>(sizes, '[data-custom]').forEach((el) => (el.onchange = () => {
+      const v = parseFloat(el.value);
+      if (Number.isFinite(v)) setParam(el.dataset.custom!, v);
+    }));
   }
+  let preset = false;
   $$(sizes, '[data-size]').forEach((b) => {
     const s = SIZE_PRESETS[b.dataset.size!];
-    b.classList.toggle('on', s.in_w === p.in_w && s.in_h === p.in_h);
+    const on = !customOpen && s.in_w === p.in_w && s.in_h === p.in_h;
+    b.classList.toggle('on', on);
+    preset ||= on;
+  });
+  sizes.querySelector('[data-size-custom]')!.classList.toggle('on', !preset);
+  sizes.querySelector<HTMLElement>('.custom-size')!.hidden = preset;
+  $$<HTMLInputElement>(sizes, '[data-custom]').forEach((el) => {
+    if (document.activeElement !== el) el.value = String(p[el.dataset.custom as 'in_w' | 'in_h']);
   });
 
   $('#stats').innerHTML = [
