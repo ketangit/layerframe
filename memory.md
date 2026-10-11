@@ -53,6 +53,12 @@
   - `sha_pinning_required: true`.
   - Fork PR runs need approval for all external contributors.
 - **2026-10-11** — #2: `cleanRegions` uses Clipper `CleanPolygon` (tol 0.01 mm) and drops rings under 0.01 mm². Across all templates × arc it removes 4.4% of points and 2 of 5,630 rings, and changes any layer's area by at most 0.028%. Cleaning applies to 2D export only; 3MF keeps the raw regions. Colors and layer names are XML-escaped in the SVG.
+- **2026-10-11** — SVG stroke modes:
+  - `'cut'` (default): a fixed 12-color high-contrast palette, one color per layer index. 12 is the maximum layer count. Laser software like LightBurn assigns cut layers by stroke color, and filament colors repeat across layers (the default palette reuses 2), so stroking by filament color would merge layers.
+  - `'filament'`: strokes in the layer's filament color, for previews that match the print.
+  - In both modes the layer label carries the filament color.
+  - The hairline stays 0.01 mm, so it looks faint in Inkscape's normal view. Use Outline view to inspect it.
+- **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
 
 ## Open Questions / Blockers
 

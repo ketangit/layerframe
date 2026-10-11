@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import ClipperLib from 'clipper-lib';
-import { TEMPLATES, buildLayers } from '../src/core/frame-core.ts';
+import { PATTERN_LAYERS, SCHEMA, TEMPLATES, buildLayers } from '../src/core/frame-core.ts';
 import type { Layer, Region, Ring } from '../src/core/frame-core.ts';
-import { cleanRegions, layerSVG, stackSVG } from '../src/core/vector.ts';
+import { CUT_COLORS, cleanRegions, layerSVG, stackSVG } from '../src/core/vector.ts';
 
 const TOL = 0.01;
 
@@ -32,7 +32,9 @@ function assertWellFormed(xml: string) {
 const subpaths = (svg: string) =>
   [...svg.matchAll(/ d="([^"]*)"/g)].flatMap((m) => m[1].split('M').filter(Boolean));
 
-const ringCount = (regions: Region[]) => regions.reduce((n, r) => n + 1 + r.holes.length, 0);
+const strokes = (svg: string) => new Set([...svg.matchAll(/ stroke="([^"]*)"/g)].map((m) => m[1]));
+
+const ringCount =(regions: Region[]) => regions.reduce((n, r) => n + 1 + r.holes.length, 0);
 
 function assertCleanRing(ring: Ring, where: string) {
   assert.ok(ring.length >= 3, `${where}: ring has ${ring.length} points`);
@@ -74,8 +76,10 @@ describe('2D export: every template', () => {
         assert.equal(subpaths(stack).length, layers.reduce((n, l) => n + ringCount(l.regions), 0));
         for (const l of layers) {
           const id = l.name.replace(/\s+/g, '-');
-          assert.match(stack, new RegExp(`<g id="${id}" inkscape:groupmode="layer" inkscape:label="${l.name}">`));
+          assert.ok(stack.includes(`<g id="${id}" inkscape:groupmode="layer" inkscape:label="${l.name} (${l.color})">`), `${l.name}: layer group`);
         }
+        // 'cut' mode: one distinct stroke per layer, whatever the filament colours are.
+        assert.equal(strokes(stack).size, layers.length);
       });
     }
   }
@@ -107,10 +111,28 @@ describe('SVG output', () => {
   it('escapes layer colour and name so a hostile value cannot break the markup', () => {
     const m = buildLayers({}, ClipperLib);
     const evil = { ...m.layers[0], color: '"/><script>alert(1)</script>', name: 'L1 <b>&' };
-    assertWellFormed(layerSVG(evil, m.derived.bbox));
-    const stack = stackSVG({ ...m, layers: [evil] });
-    assertWellFormed(stack);
-    assert.ok(!stack.includes('<script'));
+    for (const stroke of ['cut', 'filament'] as const) {
+      assertWellFormed(layerSVG(evil, m.derived.bbox, { stroke }));
+      const stack = stackSVG({ ...m, layers: [evil] }, { stroke });
+      assertWellFormed(stack);
+      assert.ok(!stack.includes('<script'));
+    }
+  });
+
+  it("'cut' strokes stay distinct when layers share a filament colour; 'filament' uses the filament colour", () => {
+    const m = buildLayers({ base_layers: 10, colors: Array(12).fill('#f4a7c8') }, ClipperLib);
+    assert.equal(m.layers.length, 12);
+    assert.equal(strokes(stackSVG(m)).size, 12);
+    assert.deepEqual([...strokes(stackSVG(m, { stroke: 'filament' }))], ['#f4a7c8']);
+    assert.ok(layerSVG(m.layers[2], m.derived.bbox).includes(`stroke="${CUT_COLORS[2]}"`));
+    assert.ok(layerSVG(m.layers[2], m.derived.bbox, { stroke: 'filament' }).includes('stroke="#f4a7c8"'));
+  });
+
+  it('has a distinct cut colour for every layer a frame can have', () => {
+    const s = SCHEMA.base_layers;
+    assert.ok(s.type === 'int');
+    assert.ok(CUT_COLORS.length >= s.max + PATTERN_LAYERS);
+    assert.equal(new Set(CUT_COLORS).size, CUT_COLORS.length);
   });
 
   it('flips Y so the frame bottom edge (y = 0) sits at the bottom of the viewBox', () => {
