@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LayerFrame Studio</title>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <header class="brand">
+      <div class="logo" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div>
+        <h1>LayerFrame Studio</h1>
+        <p class="sub">Multi-layer colour frames for AMS printing</p>
+      </div>
+      <span id="sync" class="sync" title="Server sync status">offline</span>
+    </header>
+
+    <nav class="frames" id="sizes" aria-label="Opening size presets"></nav>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="group">
+      <h2>Templates</h2>
+      <div class="tpls" id="templates"></div>
+      <p class="hint" id="tplNote"></p>
+    </section>
+
+    <div id="groups"></div>
+
+    <section class="group">
+      <h2>Layer stack</h2>
+      <ol class="stack" id="stack"></ol>
+    </section>
+
+    <section class="group">
+      <h2>Export</h2>
+      <div class="row-btns">
+        <button id="exp3mf" class="primary">3MF</button>
+        <button id="expStl">STL</button>
+        <button id="expLayers">STL per layer</button>
+      </div>
+      <p class="hint">3MF loads in Bambu Studio as one object with one part per layer — assign a filament to each part.</p>
+    </section>
+
+    <section class="group">
+      <h2>State</h2>
+      <div class="row-btns">
+        <button id="copyJson">Copy JSON</button>
+        <button id="reset" class="ghost">Reset defaults</button>
+      </div>
+    </section>
+  </aside>
+
+  <main class="stage">
+    <div class="toolbar">
+      <label class="toggle"><input type="checkbox" id="exploded"> <span>Exploded view</span></label>
+      <label class="slider" id="gapWrap"><span>Gap</span><input type="range" id="gap" min="2" max="30" step="1"></label>
+      <div class="seg" role="group" aria-label="Camera">
+        <button data-cam="iso">Iso</button>
+        <button data-cam="top">Top</button>
+        <button data-cam="side">Side</button>
+      </div>
+    </div>
+    <div id="view" class="view"></div>
+    <div class="legend" id="legend"></div>
+    <div class="status" id="status"></div>
+  </main>
+</div>
+<script type="module" src="./app.ts"></script>
+</body>
+</html>
