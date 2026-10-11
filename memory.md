@@ -16,8 +16,7 @@
 
 | # | Title | Status |
 |---|-------|--------|
-| 2 (follow-up) | SVG `cut` stroke mode, left out of PR #13 | fix ready (`fix/2-svg-cut-stroke-mode`) |
-| 3 | Core: DXF R12 writer | planning |
+| 3 | Core: DXF R12 writer | in progress (`feature/3-dxf-writer`) |
 | 4 | Kerf compensation + thin-feature warnings | planning |
 | 5 | API + MCP: `/api/export format=svg\|dxf` | planning |
 | 6 | UI: laser / CNC export buttons | planning |
@@ -28,6 +27,7 @@
 - **2026-10-11** — PR #11 merged (closes #1): `npm test` with `node:test`, 22 core tests.
 - **2026-10-11** — PR #12 merged (closes #10): hardened CI, green.
 - **2026-10-11** — PR #13 merged (closes #2): `cleanRegions` + SVG writer. GitHub hadn't synced the PR head yet, so the merge used `dc843b3` and left out the stroke-mode commit `03b1e64`. That commit is being re-landed in a follow-up PR.
+- **2026-10-11** — PR #14 merged: re-landed the `'cut'` stroke mode (`18216b2`). It was the first PR under the required check. Afterward, auto-delete of head branches was turned on and all merged local and remote branches were deleted.
 
 ---
 
@@ -60,6 +60,14 @@
   - `'filament'`: strokes in the layer's filament color, for previews that match the print.
   - In both modes the layer label carries the filament color.
   - The hairline stays 0.01 mm, so it looks faint in Inkscape's normal view. Use Outline view to inspect it.
+- **2026-10-11** — #3 DXF writer:
+  - R12 (AC1009), hand-written, CRLF line endings.
+  - `HEADER` (`$ACADVER`, `$INSUNITS 4`, `$EXTMIN`/`$EXTMAX`), `TABLES` (`LTYPE CONTINUOUS` plus a `LAYER` table with `0` and one layer per frame layer), `ENTITIES` (closed `POLYLINE`/`VERTEX`/`SEQEND` only).
+  - Y up, with the bbox minimum at (0, 0). The SVG flips Y; DXF doesn't need to.
+  - `CUT_ACI` is the DXF counterpart of `CUT_COLORS`, because R12 has no true color.
+  - Layer names are sanitized to `[A-Za-z0-9_-]`, max 31 characters.
+  - Verified: `uvx ezdxf audit` reports no errors on 16 sample files. An `ezdxf` read gives units 4 (mm), all polylines closed, and extents of 141.600 × 243.200 mm. Inkscape 1.3.2 imports it at the right mm size with one color per layer.
+  - LibreCAD isn't installed, so it hasn't been checked.
 - **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
 
 ## Open Questions / Blockers
