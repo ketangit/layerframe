@@ -2,7 +2,7 @@
 // Each layer's regions are already its exact cut footprint, so there's no slicing:
 // clean the rings, then write them as mm-unit SVG or DXF R12. Runs in the browser and in Node.
 import type { Bounds, Clipper, Layer, Model, Region, Ring } from './frame-core.ts';
-import { S, toC } from './frame-core.ts';
+import { S, makeOps, toC } from './frame-core.ts';
 
 const HAIRLINE = 0.01; // mm; laser software treats this as a cut line
 
@@ -20,6 +20,59 @@ export function cleanRegions(regions: Region[], ClipperLib: Clipper, tol = 0.01,
     const outer = clean(r.outer);
     if (!outer) continue;
     out.push({ outer, holes: r.holes.map(clean).filter((h): h is Ring => h !== null) });
+  }
+  return out;
+}
+
+// ---------- export prep: clean + kerf ----------
+// Kerf is a machine setting, not a design param, so it lives here rather than in SCHEMA.
+export const KERF_MAX = 1; // mm
+export interface ExportOptions { kerf?: number; tol?: number }
+export type ExportModel = Pick<Model, 'layers' | 'derived'>;
+
+const regionPaths = (regions: Region[]) => regions.flatMap((r) => [toC(r.outer), ...r.holes.map(toC)]);
+
+// Cleans every layer and, with kerf > 0, offsets each layer outward by kerf/2 so cut parts come out
+// at true size: outer edges grow and holes shrink (holes narrower than the kerf close, as they would
+// on the machine). bbox/out_w/out_h are recomputed for the grown outline; with kerf 0 the model's
+// derived values are kept, so the output is byte-identical to writing cleaned layers directly.
+export function prepareExport(model: Pick<Model, 'layers' | 'derived'>, ClipperLib: Clipper, { kerf = 0, tol = 0.01 }: ExportOptions = {}): ExportModel {
+  if (!(kerf >= 0 && kerf <= KERF_MAX)) throw new RangeError(`kerf must be between 0 and ${KERF_MAX} mm, got ${kerf}`);
+  const ops = makeOps(ClipperLib);
+  const layers = model.layers.map((l) => {
+    let regions = cleanRegions(l.regions, ClipperLib, tol);
+    if (kerf > 0) regions = cleanRegions(ops.toRegions(ops.offset(regionPaths(regions), kerf / 2, true)), ClipperLib, tol);
+    return { ...l, regions };
+  });
+  if (kerf === 0) return { layers, derived: model.derived };
+  const bbox = ops.bounds(layers.flatMap((l) => regionPaths(l.regions)));
+  return {
+    layers,
+    derived: { ...model.derived, bbox, out_w: +(bbox.maxX - bbox.minX).toFixed(2), out_h: +(bbox.maxY - bbox.minY).toFixed(2) },
+  };
+}
+
+// ---------- thin-feature warnings ----------
+export interface ExportWarning { layer: string; feature: string; width: number; message: string }
+
+// Flags pattern-layer features (rims, lace outline) no wider than 2 × kerf: after the beam takes
+// kerf/2 off each side there's little or nothing left. Widths come from the design params, which
+// set those features exactly; 0 means the feature is off.
+export function exportWarnings(model: Pick<Model, 'layers' | 'params'>, kerf: number): ExportWarning[] {
+  if (!(kerf > 0)) return [];
+  const p = model.params, limit = 2 * kerf;
+  const features: { kinds: Layer['kind'][]; feature: string; width: number }[] = [
+    { kinds: ['motif', 'lace'], feature: 'outer rim', width: p.rim_w },
+    { kinds: ['motif', 'lace'], feature: 'inner rim', width: p.inner_rim_w },
+    { kinds: ['lace'], feature: 'lace outline', width: p.lace_w },
+  ];
+  const out: ExportWarning[] = [];
+  for (const l of model.layers) for (const f of features) {
+    if (!f.kinds.includes(l.kind) || f.width <= 0 || f.width > limit) continue;
+    out.push({
+      layer: l.name, feature: f.feature, width: f.width,
+      message: `${l.name}: ${f.feature} is ${f.width} mm, at most 2 × kerf (${+limit.toFixed(3)} mm); it may burn away or break.`,
+    });
   }
   return out;
 }

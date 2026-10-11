@@ -48,7 +48,7 @@ server.ts                 HTTP server: JSON API + SSE; mounts Vite middleware in
 mcp/server.ts             MCP stdio server — thin wrapper over the HTTP API
 src/core/frame-core.ts    GEOMETRY CORE — types, schema, defaults, templates, motifs, placements, layers, state
 src/core/mesh.ts          extrusion (three.js), binary STL + 3MF writers
-src/core/vector.ts        2D export: cleanRegions + per-layer / stacked SVG and DXF R12 (laser, CNC)
+src/core/vector.ts        2D export: prepareExport (clean + kerf), exportWarnings, per-layer / stacked SVG and DXF R12
 src/ui/index.html         UI shell; Vite root
 src/ui/styles.css         CSS variables; light + dark via prefers-color-scheme (imported from app.ts)
 src/ui/app.ts             three.js viewer, parameter panel, template gallery, live sync
