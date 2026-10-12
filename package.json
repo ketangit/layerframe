@@ -1,14 +1,13 @@
 {
   "name": "layerframe",
   "version": "1.0.0",
-  "description": "Local parametric multi-layer colour frame generator (HueForge/LayerStudio style) with JSON API and MCP server",
-  "main": "server.ts",
+  "description": "Browser-only parametric multi-layer colour frame generator (HueForge/LayerStudio style) with an MCP bridge",
   "type": "module",
   "scripts": {
-    "start": "node server.ts",
-    "dev": "node server.ts",
+    "start": "vite",
+    "dev": "vite",
     "build": "tsc -p . && vite build",
-    "serve": "node server.ts --prod",
+    "serve": "vite preview",
     "typecheck": "tsc -p .",
     "mcp": "node mcp/server.ts",
     "test": "node --test \"test/**/*.test.ts\""
@@ -21,6 +20,7 @@
     "clipper-lib": "^6.4.2",
     "jszip": "^3.10.1",
     "three": "^0.169.0",
+    "ws": "^8.22.0",
     "zod": "^4.6.5"
   },
   "engines": {
@@ -30,6 +30,7 @@
     "@types/clipper-lib": "^6.4.0",
     "@types/node": "^24.19.2",
     "@types/three": "^0.169.0",
+    "@types/ws": "^8.18.2",
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
   }

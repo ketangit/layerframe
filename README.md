@@ -1,6 +1,6 @@
 # LayerFrame
 
-A local, parametric generator for multi-layer colour frames, built for Bambu Lab AMS printing. It works like LayerStudio's "Layered Art" mode: stepped terraces, a raised motif and a lace top layer, each layer its own filament. This is an independent implementation and contains no LayerStudio code.
+A browser-based, parametric generator for multi-layer colour frames, built for Bambu Lab AMS printing. It works like LayerStudio's "Layered Art" mode: stepped terraces, a raised motif and a lace top layer, each layer its own filament. This is an independent implementation and contains no LayerStudio code.
 
 Default setup: 6 layers × 1.5 mm = 9 mm, 4 filaments, stacked bottom to top:
 
@@ -52,15 +52,17 @@ To add your own template, add an entry to `TEMPLATES` in `src/core/frame-core.ts
 
 ## Run
 
-Requires Node >= 24.17.0, which runs the `.ts` server files directly via native type stripping.
+Live at **https://layerframe.craftedbyk.com**. The app runs entirely in the browser: the open tab holds the design and generates every export. There is no server.
+
+Locally (Node >= 24.17.0):
 
 ```bash
 npm install
-npm start            # dev: API + Vite (HMR) on http://localhost:5317
-npm run build        # type-check (tsc) + Vite production build into dist/
-npm run serve        # serve dist/ + API on http://localhost:5317
+npm start            # Vite dev server (HMR) on http://localhost:5317
+npm run build        # type-check (tsc) + Vite production build into dist/ (static)
+npm run serve        # preview dist/ on http://localhost:5317
 npm run typecheck    # tsc only
-npm test             # core tests (node:test)
+npm test             # core, store, bridge and export tests (node:test)
 ```
 
 Open the URL. You can:
@@ -72,42 +74,15 @@ Open the URL. You can:
   - **3MF**: one object with one part per layer. In Bambu Studio, answer "Yes" to "load as a single object with multiple parts", then assign a filament to each part.
   - **STL**: merged, or one file per layer (zip).
   - **Laser / CNC**: **SVG** or **DXF** (R12) of the whole stack, in mm, with one SVG group / DXF layer and one colour per frame layer, or **SVG per layer** (zip). Set **Kerf (mm)** to grow each part by half the kerf so it cuts at true size. The panel warns when a rim or the lace outline is no wider than 2 × kerf. The kerf is remembered in your browser and isn't part of the frame state.
+- **Save design** / **Open design**: the whole design (params + view) as a `.layerframe.json` file, to keep or move to another browser. Opening a file replaces the current design. Colours that aren't `#rrggbb` / `#rgb` fall back to the layer default.
 
 Files are named after the template, for example `Lace_Daisies.3mf`.
 
-State is saved to `state.json`. An older multi-frame `state.json` is converted automatically; the frame that was selected is kept. Every change, whether from the UI, the API or MCP, is pushed live to any open browser tab.
-
-## JSON API (what MCP uses)
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/schema` | all parameters with type, unit, range, defaults, size presets |
-| GET | `/api/state` | full state `{params, view}` |
-| PATCH | `/api/state` `{"patch":{…}}` | deep merge (`null` deletes a key) |
-| PUT | `/api/state` | replace |
-| POST | `/api/reset` | defaults |
-| GET | `/api/templates` | template catalogue |
-| POST | `/api/template` `{"name":"Flower Garden"}` | apply a template (opening size kept) |
-| GET | `/api/model` | derived sizes + per-layer z / colour / area |
-| GET | `/api/export?format=3mf` | download (`format=stl&layer=5` for one layer; `name=` sets the file name; `save=1` writes to `./exports` and returns the path) |
-| GET | `/api/export?format=svg` / `format=dxf` | 2D cut files for laser / CNC (SVG, or DXF R12, in mm). Default: the whole stack, with one SVG group / DXF layer per frame layer. `layer=N` (0-based) for one layer; `split=1` for a zip of one file per layer; `kerf=0.1` (mm, 0–1) grows each part by kerf/2 so it cuts at true size. With `save=1` the JSON also lists `warnings` for features no wider than 2 × kerf. Bad `kerf` / `layer` returns 400. |
-| GET | `/api/events` | server-sent events stream of state changes |
-
-Examples:
-
-```bash
-curl -X PATCH localhost:5317/api/state -H "Content-Type: application/json" \
-  -d '{"patch":{"params":{"in_w":150,"in_h":200,"motif":"star","petals":5}}}'
-curl -X PATCH localhost:5317/api/state -H "Content-Type: application/json" \
-  -d '{"patch":{"params":{"arc":false}}}'
-curl "localhost:5317/api/export?format=3mf&save=1"
-curl "localhost:5317/api/export?format=svg&split=1" -o layers.zip     # one SVG per layer
-curl "localhost:5317/api/export?format=dxf&kerf=0.1&save=1"         # DXF, kerf-compensated, + warnings
-```
+The design is saved in the browser (`localStorage`, key `layerframe.state`) and survives reloads. If storage is blocked (some private modes), the app still works but forgets the design on reload. Tabs of the same browser stay in sync. Older multi-frame designs, including the `state.json` written by earlier versions, are converted automatically: load an old `state.json` with **Open design**.
 
 ## MCP server
 
-`mcp/server.ts` is a stdio MCP server that wraps the API. It provides these tools:
+`mcp/server.ts` is a stdio MCP server. The app has no server-side API, so it forwards every tool call over a WebSocket bridge on `ws://127.0.0.1:5318` to the open LayerFrame tab, which runs it against its own design. Changes an AI makes show up live in that tab. Tools:
 
 - `get_schema`
 - `get_state`
@@ -115,36 +90,52 @@ curl "localhost:5317/api/export?format=dxf&kerf=0.1&save=1"         # DXF, kerf-
 - `set_params`
 - `set_layer_colors`
 - `set_view`
-- `export` (3MF, STL, and SVG / DXF with `layer`, `split`, `kerf`)
+- `export` (3MF, STL, and SVG / DXF with `layer`, `split`, `kerf`): the tab builds the file, the MCP server writes it to `./exports` and returns the path
 - `list_templates`
 - `apply_template`
 - `reset`
 
-Keep `npm start` running, then register the MCP server with your client. Example for Claude Desktop (`claude_desktop_config.json`), using your own absolute path:
+Setup:
 
-```json
-{
-  "mcpServers": {
-    "layerframe": {
-      "command": "node",
-      "args": ["E:/ketan/ClaudeCoWork/layerframe/mcp/server.ts"],
-      "env": { "LAYERFRAME_URL": "http://localhost:5317" }
-    }
-  }
-}
-```
+1. Register the server with your MCP client. Example for Claude Desktop (`claude_desktop_config.json`), using your own absolute path:
+
+   ```json
+   {
+     "mcpServers": {
+       "layerframe": {
+         "command": "node",
+         "args": ["E:/ketan/ClaudeCoWork/layerframe/mcp/server.ts"]
+       }
+     }
+   }
+   ```
+
+2. Open the app and click the **MCP off** badge next to the title. It turns to **MCP live** once the MCP server is running; the choice is remembered. One tab is attached at a time; the newest one wins.
+
+Notes:
+
+- **Local tab (`npm start`)**: fully supported.
+- **Live site (https://layerframe.craftedbyk.com)**: best-effort. Chrome asks once for permission to reach local network devices; Safari may block an https page from connecting to `ws://127.0.0.1` at all. Use the local tab if it won't connect.
+- The bridge only listens on 127.0.0.1 and only accepts pages from `http://localhost:5317`, `http://127.0.0.1:5317` and `https://layerframe.craftedbyk.com` (WebSocket `Origin` check). Env vars: `LAYERFRAME_BRIDGE_PORT` (default 5318), `LAYERFRAME_ORIGINS` (comma-separated allowlist).
+
+## Deploy
+
+The production site is static `dist/` on Vercel Hobby (no Functions). `.github/workflows/deploy.yml` deploys with the Vercel CLI (pinned in `.github/vercel-cli/`): a same-repo PR gets a preview URL, a push to `main` goes to production. Vercel's own Git integration is off (`vercel.json`), which also sets the security headers (CSP, `nosniff`, etc.). Repo secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 
 ## Code layout
 
 ```
-server.ts                 HTTP server: JSON API + SSE; Vite middleware in dev, dist/ in prod
-mcp/server.ts             MCP stdio server
+mcp/server.ts             MCP stdio server + WebSocket bridge to the open tab
 src/core/frame-core.ts    geometry core: schema, types, defaults, layer polygons (Clipper), state patching
-src/core/mesh.ts          extrusion (three.js), STL + 3MF writers — shared by browser and Node
+src/core/mesh.ts          extrusion (three.js), STL + 3MF writers
+src/core/vector.ts        2D export: SVG / DXF, kerf, thin-feature warnings
+src/core/store.ts         client state store (localStorage, migrate, patch, templates, design JSON)
+src/core/bridge.ts        MCP bridge protocol + tool handler (runs in the tab)
 src/ui/index.html         UI shell (Vite root)
 src/ui/styles.css
-src/ui/app.ts             three.js viewer + parameter panel + live sync
+src/ui/app.ts             three.js viewer + parameter panel + MCP bridge client
 src/ui/thumb.ts           top-view SVG thumbnails
+vercel.json               static deploy config + security headers
 vite.config.ts, tsconfig.json
 ```
 
@@ -153,4 +144,4 @@ To add a new motif:
 1. Add a function to `MOTIF_LIBRARY` in `frame-core.ts` that returns the motif's parts as polygons around the origin.
 2. Add its name to the `MOTIFS` list.
 
-The UI, API and MCP pick it up automatically.
+The UI and MCP pick it up automatically.

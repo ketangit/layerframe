@@ -3,13 +3,17 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import ClipperLib from 'clipper-lib';
 import JSZip from 'jszip';
-import { TEMPLATES, SIZE_PRESETS, SCHEMA, defaultState, migrate, applyPatch, applyTemplate, layerCount, schemaEntries } from '../core/frame-core.ts';
+import { TEMPLATES, SIZE_PRESETS, SCHEMA, applyTemplate, layerCount, schemaEntries } from '../core/frame-core.ts';
 import type { FieldSpec, Patch, State } from '../core/frame-core.ts';
 import { frameSVG } from './thumb.ts';
 import { buildFrame, effectiveParams, build3MF, geometryToSTL } from '../core/mesh.ts';
 import type { Frame } from '../core/mesh.ts';
 import { KERF_MAX, export2DFor, exportWarnings } from '../core/vector.ts';
 import type { Format2D } from '../core/vector.ts';
+import { createStore, STATE_KEY } from '../core/store.ts';
+import type { KV } from '../core/store.ts';
+import { BRIDGE_PORT, handleCall } from '../core/bridge.ts';
+import type { BridgeCall, BridgeReply } from '../core/bridge.ts';
 import './styles.css';
 
 declare global {
@@ -22,8 +26,10 @@ type Cam = 'iso' | 'top' | 'side';
 
 const CLIENT = 'ui:' + Math.random().toString(36).slice(2, 8);
 
-let state = defaultState();
-let online = false;
+// The tab owns the state: persisted to localStorage (in-memory if storage is blocked), shared with the MCP bridge.
+const storage = ((): KV | null => { try { return window.localStorage; } catch { return null; } })();
+const store = createStore(storage);
+let state = store.get();
 let customOpen = false;               // Custom size chosen even if W×H matches a preset
 const hidden = new Set<number>();     // hidden layer indices (view only)
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
@@ -131,28 +137,14 @@ function setCam(kind: Cam) {
 }
 
 // ---------------- state changes ----------------
-let rebuildT: ReturnType<typeof setTimeout> | undefined, pushT: ReturnType<typeof setTimeout> | undefined;
-let pending: Patch = {};
-function change(patch: Patch, { push = true } = {}) {
-  state = applyPatch(state, patch);
-  clearTimeout(rebuildT); rebuildT = setTimeout(rebuild, 40);
-  if (push && online) {
-    deepAssign(pending, patch);
-    clearTimeout(pushT);
-    pushT = setTimeout(async () => {
-      const body = pending; pending = {};
-      try {
-        await fetch('./api/state', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-source': CLIENT }, body: JSON.stringify({ patch: body }) });
-      } catch { setOnline(false); }
-    }, 250);
-  }
-}
-function deepAssign(t: Record<string, any>, s: Record<string, unknown>) {
-  for (const [k, v] of Object.entries(s)) {
-    if (v && typeof v === 'object' && !Array.isArray(v)) { t[k] = t[k] && typeof t[k] === 'object' ? t[k] : {}; deepAssign(t[k], v as Record<string, unknown>); }
-    else t[k] = v;
-  }
-}
+let rebuildT: ReturnType<typeof setTimeout> | undefined;
+// Local edits rebuild on a short debounce (sliders); outside changes (template, reset, MCP, other tab) at once.
+store.subscribe((next, source) => {
+  state = next;
+  clearTimeout(rebuildT);
+  if (source === CLIENT) rebuildT = setTimeout(rebuild, 40); else rebuild();
+});
+function change(patch: Patch) { store.patch(patch, CLIENT); }
 const setParam = (key: string, value: unknown) => change({ params: { [key]: value } });
 
 // ---------------- panel ----------------
@@ -321,14 +313,7 @@ function scheduleThumbs() {
   }, 400);
 }
 
-async function loadTemplate(name: string) {
-  if (online) {
-    await fetch('./api/template', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-source': 'ui-template' }, body: JSON.stringify({ name }) });
-  } else {
-    state = applyTemplate(state, name);
-    rebuild();
-  }
-}
+function loadTemplate(name: string) { store.applyTemplate(name, 'ui-template'); }
 
 // ---------------- toolbar + exports ----------------
 $$(document, '[data-cam]').forEach((b) => (b.onclick = () => setCam(b.dataset.cam as Cam)));
@@ -379,27 +364,71 @@ $('#expSvg').onclick = () => export2D('svg');
 $('#expDxf').onclick = () => export2D('dxf');
 $('#expSvgLayers').onclick = () => export2D('svg', true);
 
-$('#copyJson').onclick =() => navigator.clipboard.writeText(JSON.stringify(state, null, 2));
-$('#reset').onclick = async () => {
-  if (online) await fetch('./api/reset', { method: 'POST' });
-  else { state = defaultState(); rebuild(); }
+// Design file: the whole state as JSON (params + view), loadable later or in another browser.
+$('#saveJson').onclick = () => download(new Blob([store.exportJSON()], { type: 'application/json' }), `${baseName()}.layerframe.json`);
+const openInput = $<HTMLInputElement>('#openJsonFile');
+$('#openJson').onclick = () => openInput.click();
+openInput.onchange = async () => {
+  const f = openInput.files?.[0];
+  openInput.value = '';
+  if (!f) return;
+  try { store.importJSON(await f.text()); $('#status').textContent = `opened ${f.name}`; }
+  catch (e) { $('#status').textContent = `${f.name}: ${e instanceof Error ? e.message : e}`; }
 };
+$('#reset').onclick = () => store.reset();
 
-// ---------------- server sync (also how MCP tweaks show up live) ----------------
-function setOnline(v: boolean) { online = v; const s = $('#sync'); s.textContent = v ? 'live' : 'offline'; s.classList.toggle('on', v); }
-function connect() {
-  let es: EventSource;
-  try { es = new EventSource('./api/events'); } catch { return; }
-  es.addEventListener('state', (e) => {
-    const msg = JSON.parse((e as MessageEvent<string>).data);
-    setOnline(true);
-    if (msg.source === CLIENT) return;
-    state = migrate(msg.state);
-    rebuild();
-  });
-  es.onerror = () => setOnline(false);
+// Another tab of the app changed the design: follow it.
+window.addEventListener('storage', (e) => {
+  if (e.key !== STATE_KEY || !e.newValue) return;
+  try { store.replace(JSON.parse(e.newValue), 'storage'); } catch {}
+});
+
+// ---------------- MCP bridge (localhost WebSocket to mcp/server.ts) ----------------
+// Opt-in: connecting from https to 127.0.0.1 can raise a browser permission prompt, and failed attempts
+// log console errors, so nothing connects until the user clicks the badge. The choice is remembered.
+const BRIDGE_KEY = 'layerframe.bridge';
+const badge = $<HTMLButtonElement>('#sync');
+let ws: WebSocket | undefined, wantBridge = false, retryMs = 1000, retryT: ReturnType<typeof setTimeout> | undefined;
+function setBadge(mode: 'off' | 'waiting' | 'live') {
+  badge.textContent = mode === 'live' ? 'MCP live' : mode === 'waiting' ? 'MCP …' : 'MCP off';
+  badge.classList.toggle('on', mode === 'live');
+  badge.title = mode === 'live' ? 'Connected to the MCP server. Click to disconnect.'
+    : mode === 'waiting' ? `Waiting for the MCP server on ws://127.0.0.1:${BRIDGE_PORT} (npm run mcp). Click to stop.`
+    : 'Let an AI drive this tab through the LayerFrame MCP server. Click to connect.';
 }
+function bridgeConnect() {
+  clearTimeout(retryT);
+  setBadge('waiting');
+  const sock = new WebSocket(`ws://127.0.0.1:${BRIDGE_PORT}`);
+  ws = sock;
+  sock.onopen = () => { retryMs = 1000; setBadge('live'); };
+  sock.onmessage = async (e) => {
+    let msg: BridgeCall;
+    try { msg = JSON.parse(String(e.data)); } catch { return; }
+    let reply: BridgeReply;
+    try { reply = { id: msg.id, result: await handleCall(store, msg.method, msg.args ?? {}, ClipperLib, JSZip) }; }
+    catch (err) { reply = { id: msg.id, error: err instanceof Error ? err.message : String(err) }; }
+    if (sock.readyState === WebSocket.OPEN) sock.send(JSON.stringify(reply));
+  };
+  sock.onclose = (e) => {
+    if (ws !== sock) return;
+    ws = undefined;
+    if (e.code === 4000) wantBridge = false;   // another tab took over the bridge; don't fight it
+    if (!wantBridge) { setBadge('off'); return; }
+    setBadge('waiting');
+    retryT = setTimeout(bridgeConnect, retryMs);
+    retryMs = Math.min(retryMs * 2, 30000);
+  };
+}
+function setBridge(on: boolean) {
+  wantBridge = on;
+  try { localStorage.setItem(BRIDGE_KEY, on ? 'on' : 'off'); } catch {}
+  if (on) { retryMs = 1000; bridgeConnect(); }
+  else { clearTimeout(retryT); const s = ws; ws = undefined; s?.close(); setBadge('off'); }
+}
+badge.onclick = () => setBridge(!wantBridge);
+setBadge('off');
+try { if (localStorage.getItem(BRIDGE_KEY) === 'on') { wantBridge = true; bridgeConnect(); } } catch {}
 
 rebuild();
-connect();
 window.LayerFrame = { get state() { return state; }, change, setCam, rebuild };
