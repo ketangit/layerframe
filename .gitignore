@@ -4,4 +4,4 @@ dist/
 # legacy: the old server kept the design here; load it in the app with "Open design"
 state.json
 .vercel/
-.env*.local
+.env*
