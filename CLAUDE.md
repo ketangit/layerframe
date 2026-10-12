@@ -56,7 +56,7 @@ vercel.json               static Vercel config: build -> dist/, Git deploys off,
 test/core.test.ts         core: templates x arc, applyPatch, migrate, colour validation
 test/vector.test.ts       2D export: SVG + DXF structure
 test/store.test.ts        store: persistence, blocked storage, migration, templates, design JSON, subscribe
-test/bridge.test.ts       handleCall for every tool + mcp/server.ts Origin allowlist (spawns it)
+test/bridge.test.ts       handleCall for every tool + mcp/server.ts Origin allowlist and busy-port takeover (spawns it)
 vite.config.ts            root src/ui, outDir dist/, dev + preview on 127.0.0.1:5317
 tsconfig.json             strict, noEmit, allowImportingTsExtensions, erasableSyntaxOnly
 exports/, dist/, .vercel/     MCP exports / build output / Vercel CLI link (gitignored)
@@ -78,7 +78,7 @@ exports/, dist/, .vercel/     MCP exports / build output / Vercel CLI link (giti
 - **Clipper scale:** Clipper works in integers at a scale of `S = 1000`. Always convert with `toC()`, and divide by `S` when reading results back.
 - **Coordinates:** units are mm. X is the width, centred on 0. Y runs up the frame, with the bottom edge at 0. Z is the layer stack.
 - **Sync:** every UI change goes through the store (`store.patch(..., source)`); subscribers rebuild the view. Other tabs follow via the `storage` event.
-- **MCP bridge:** `mcp/server.ts` listens on `127.0.0.1:5318` and accepts only allowlisted Origins (`BRIDGE_ORIGINS` in `bridge.ts`). The tab connects when the user clicks the MCP badge (opt-in, remembered), runs each call with `handleCall()` and returns the result; exports come back base64 and the MCP server writes `./exports`. One tab at a time (newest wins).
+- **MCP bridge:** `mcp/server.ts` listens on `127.0.0.1:5318` and accepts only allowlisted Origins (`BRIDGE_ORIGINS` in `bridge.ts`). The tab connects when the user clicks the MCP badge (opt-in, remembered), runs each call with `handleCall()` and returns the result; exports come back base64 and the MCP server writes `./exports`. One tab at a time (newest wins). If the port is busy (another copy, e.g. `npm run mcp`), the server retries every 2 s and tool calls say so.
 - **Untrusted input:** designs arrive from files and MCP. `normalize()` clamps numbers, checks enums and forces colours to `#rrggbb`. Never put an unvalidated state string into `innerHTML`.
 
 ## Extending
