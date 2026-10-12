@@ -116,6 +116,7 @@ Notes:
 
 - **Local tab (`npm start`)**: fully supported.
 - **Live site (https://layerframe.craftedbyk.com)**: best-effort. Chrome asks once for permission to reach local network devices; Safari may block an https page from connecting to `ws://127.0.0.1` at all. Use the local tab if it won't connect.
+- Run only one copy of the MCP server. Your MCP client starts its own, so don't also run `npm run mcp` in a terminal: the first copy holds port 5318 and gets the tab. A second copy reports that in its tool errors and takes the port over within 2 s once the first one exits; the tab reconnects by itself.
 - The bridge only listens on 127.0.0.1 and only accepts pages from `http://localhost:5317`, `http://127.0.0.1:5317` and `https://layerframe.craftedbyk.com` (WebSocket `Origin` check). Env vars: `LAYERFRAME_BRIDGE_PORT` (default 5318), `LAYERFRAME_ORIGINS` (comma-separated allowlist).
 
 ## Deploy

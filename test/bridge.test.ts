@@ -6,6 +6,8 @@ import path from 'node:path';
 import ClipperLib from 'clipper-lib';
 import JSZip from 'jszip';
 import { WebSocket } from 'ws';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { createStore } from '../src/core/store.ts';
 import { handleCall, toBase64, fromBase64, METHODS, BRIDGE_ORIGINS } from '../src/core/bridge.ts';
 import { TEMPLATES, defaultState, layerCount, normalize } from '../src/core/frame-core.ts';
@@ -105,5 +107,52 @@ describe('mcp/server.ts bridge (Origin allowlist)', () => {
     assert.equal(await attempt('https://evil.example'), 'http 401');
     assert.equal(await attempt('http://localhost:9999'), 'http 401');
     assert.equal(await attempt(), 'http 401');
+  });
+});
+
+describe('mcp/server.ts bridge (port held by another copy)', () => {
+  const PORT = 16318 + Math.floor(Math.random() * 1000);
+  const server = path.join(import.meta.dirname, '..', 'mcp', 'server.ts');
+  const env = { ...process.env, LAYERFRAME_BRIDGE_PORT: String(PORT) } as Record<string, string>;
+  let first: ChildProcess;
+  let client: Client;
+  const second: { log: string } = { log: '' };
+  const until = async (cond: () => boolean, ms = 15000) => {
+    for (const t0 = Date.now(); !cond(); await new Promise((r) => setTimeout(r, 100))) {
+      if (Date.now() - t0 > ms) throw new Error('timed out');
+    }
+  };
+
+  before(async () => {
+    let firstLog = '';
+    first = spawn(process.execPath, [server], { env, stdio: ['pipe', 'ignore', 'pipe'] });
+    first.stderr!.on('data', (d: Buffer) => (firstLog += d));
+    await until(() => firstLog.includes('listening'));
+    const transport = new StdioClientTransport({ command: process.execPath, args: [server], env, stderr: 'pipe' });
+    transport.stderr!.on('data', (d: Buffer) => (second.log += d));
+    client = new Client({ name: 'test', version: '0' });
+    await client.connect(transport);
+  });
+  after(async () => { first.kill(); await client.close(); });
+
+  it('reports the busy port in tool errors, then takes the port over when the other copy exits', async () => {
+    await until(() => second.log.includes('is in use'));
+    const r = await client.callTool({ name: 'get_state', arguments: {} }) as { isError?: boolean; content: { text: string }[] };
+    assert.equal(r.isError, true);
+    assert.match(r.content[0].text, /held by another LayerFrame MCP server/);
+
+    first.kill();
+    await until(() => second.log.includes('listening'));
+    const store = createStore(null);
+    const tab = new WebSocket(`ws://127.0.0.1:${PORT}`, { origin: BRIDGE_ORIGINS[0] });
+    tab.on('message', async (raw: Buffer) => {
+      const m = JSON.parse(String(raw));
+      tab.send(JSON.stringify({ id: m.id, result: await handleCall(store, m.method, m.args ?? {}, ClipperLib, JSZip) }));
+    });
+    await new Promise((ok) => tab.on('open', ok));
+    const ok = await client.callTool({ name: 'set_params', arguments: { params: { in_w: 140 } } }) as { isError?: boolean };
+    assert.ok(!ok.isError);
+    assert.equal(store.get().params.in_w, 140);
+    tab.close();
   });
 });

@@ -9,6 +9,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
+import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { BRIDGE_PORT, BRIDGE_ORIGINS, fromBase64 } from '../src/core/bridge.ts';
 import type { BridgeCall, BridgeReply, ExportResult, Method } from '../src/core/bridge.ts';
@@ -17,6 +18,7 @@ const PORT = Number(process.env.LAYERFRAME_BRIDGE_PORT || BRIDGE_PORT);
 const ORIGINS = process.env.LAYERFRAME_ORIGINS ? process.env.LAYERFRAME_ORIGINS.split(',').map((s) => s.trim()) : BRIDGE_ORIGINS;
 const EXPORTS = path.join(import.meta.dirname, '..', 'exports');
 const TIMEOUT_MS = 30_000;
+const RETRY_MS = 2_000;
 // stdout carries the MCP protocol; diagnostics go to stderr.
 const log = (...a: unknown[]) => console.error('[layerframe-bridge]', ...a);
 
@@ -25,19 +27,34 @@ let tab: WebSocket | undefined;
 let nextId = 1;
 const pending = new Map<number, { ok: (v: unknown) => void; bad: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 
-const wss = new WebSocketServer({
-  host: '127.0.0.1',
-  port: PORT,
-  maxPayload: 64 * 1024 * 1024,
-  verifyClient: ({ origin }: { origin: string }) => {
-    const allowed = ORIGINS.includes(origin);
-    if (!allowed) log(`rejected connection from origin ${origin || '(none)'}`);
-    return allowed;
-  },
-});
-wss.on('listening', () => log(`listening on ws://127.0.0.1:${PORT} for ${ORIGINS.join(', ')}`));
-wss.on('error', (e) => log(`bridge unavailable: ${e.message}`));
-wss.on('connection', (ws, req) => {
+// The port can be held by another copy of this server (e.g. `npm run mcp` in a terminal while an MCP client
+// started its own). Keep retrying so this copy takes over once the other exits, and say so in tool errors.
+type BridgeState = 'starting' | 'listening' | 'busy' | 'failed';
+let bridge: BridgeState = 'starting', bridgeError = '';
+function listen() {
+  const wss = new WebSocketServer({
+    host: '127.0.0.1',
+    port: PORT,
+    maxPayload: 64 * 1024 * 1024,
+    verifyClient: ({ origin }: { origin: string }) => {
+      const allowed = ORIGINS.includes(origin);
+      if (!allowed) log(`rejected connection from origin ${origin || '(none)'}`);
+      return allowed;
+    },
+  });
+  wss.on('listening', () => { bridge = 'listening'; log(`listening on ws://127.0.0.1:${PORT} for ${ORIGINS.join(', ')}`); });
+  wss.on('connection', attach);
+  wss.on('error', (e: NodeJS.ErrnoException) => {
+    wss.close();
+    const busy = e.code === 'EADDRINUSE';
+    if (bridge !== (busy ? 'busy' : 'failed')) {
+      log(busy ? `port ${PORT} is in use (another LayerFrame MCP server?); retrying every ${RETRY_MS / 1000}s` : `bridge unavailable: ${e.message}; retrying`);
+    }
+    bridge = busy ? 'busy' : 'failed'; bridgeError = e.message;
+    setTimeout(listen, RETRY_MS).unref();
+  });
+}
+function attach(ws: WebSocket, req: IncomingMessage) {
   if (tab && tab !== ws) tab.close(4000, 'replaced by a newer tab');
   tab = ws;
   log(`tab attached from ${req.headers.origin}`);
@@ -50,10 +67,15 @@ wss.on('connection', (ws, req) => {
     if ('error' in msg) p.bad(new Error(msg.error)); else p.ok(msg.result);
   });
   ws.on('close', () => { if (tab === ws) tab = undefined; });
-});
+}
+listen();
 
 function call<T = unknown>(method: Method, args: Record<string, unknown> = {}): Promise<T> {
   const ws = tab;
+  if (bridge === 'busy') {
+    return Promise.reject(new Error(`Port ${PORT} is held by another LayerFrame MCP server (probably \`npm run mcp\` in a terminal), so the open tab is attached to that one, not to this MCP client. Stop the other one (Ctrl+C); this server takes the port within ${RETRY_MS / 1000}s and the tab reconnects by itself.`));
+  }
+  if (bridge === 'failed') return Promise.reject(new Error(`The LayerFrame bridge can't listen on 127.0.0.1:${PORT}: ${bridgeError}. Retrying.`));
   if (!ws || ws.readyState !== ws.OPEN) {
     return Promise.reject(new Error(`No LayerFrame tab attached. Open the app (npm start → http://localhost:5317, or https://layerframe.craftedbyk.com) and click the "MCP" badge to connect to ws://127.0.0.1:${PORT}.`));
   }
