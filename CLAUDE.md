@@ -1,6 +1,6 @@
 # LayerFrame
 
-A local web app that generates parametric multi-layer colour picture frames for Bambu Lab AMS printing. Each Z layer is one filament: a base, stepped terraces, a solid motif layer and a lace-outline top layer. It designs **one frame at a time**. It's an independent, LayerStudio-style implementation and must not copy LayerStudio code or artwork.
+A browser-only web app (live at https://layerframe.craftedbyk.com) that generates parametric multi-layer colour picture frames for Bambu Lab AMS printing. Each Z layer is one filament: a base, stepped terraces, a solid motif layer and a lace-outline top layer. It designs **one frame at a time**. It's an independent, LayerStudio-style implementation and must not copy LayerStudio code or artwork.
 
 ## Planning workflow (new features)
 
@@ -24,46 +24,47 @@ Notes:
 
 ```powershell
 npm install                 # once; node >= 24.17.0 (see .nvmrc)
-npm start                   # dev: API + Vite middleware (HMR) at http://localhost:5317  (PORT env var to change)
+npm start                   # Vite dev server (HMR) at http://localhost:5317 (127.0.0.1, strictPort)
 npm run typecheck           # tsc (TypeScript 7), no emit
-npm test                    # node:test core tests (test/*.test.ts)
-npm run build               # typecheck + vite build -> dist/
-npm run serve               # prod: API + static dist/ (node server.ts --prod)
-npm run mcp                 # MCP stdio server; needs `npm start` running
-
-# quick API checks (use curl.exe, not the PowerShell curl alias)
-curl.exe -s localhost:5317/api/model
-curl.exe -s -X PATCH localhost:5317/api/state -H "Content-Type: application/json" -d "{\"patch\":{\"params\":{\"in_w\":150}}}"
-curl.exe -s "localhost:5317/api/export?format=3mf&save=1"     # writes .\exports\<template>.3mf
+npm test                    # node:test (test/*.test.ts)
+npm run build               # typecheck + vite build -> static dist/
+npm run serve               # vite preview of dist/ at http://localhost:5317
+npm run mcp                 # MCP stdio server + WebSocket bridge on ws://127.0.0.1:5318
 ```
 
-To stop a running server: press `Ctrl+C` in its terminal. If the port is stuck, run `Get-Process node | Stop-Process`, which stops every Node process.
+There is no server: the browser tab owns the state (`localStorage`) and generates every export. To stop Vite, press `Ctrl+C` in its terminal.
 
-Node runs the `.ts` files directly through native type stripping, so the server has no compile step. Vite serves and bundles the UI only. In dev, edits to `src/ui/` and `src/core/` hot-reload in the browser. After editing `server.ts` or the core it imports (`frame-core.ts`, `mesh.ts`), restart `npm start`. Vite and Node only strip types and never type-check, so run `npm run typecheck` before handing back a change.
+Vite serves and bundles the UI. Edits to `src/ui/` and `src/core/` hot-reload. Node runs `mcp/server.ts` and the tests directly through native type stripping. Vite and Node only strip types and never type-check, so run `npm run typecheck` before handing back a change.
 
 ## Layout
 
 ```
-server.ts                 HTTP server: JSON API + SSE; mounts Vite middleware in dev, serves dist/ in prod
-mcp/server.ts             MCP stdio server — thin wrapper over the HTTP API
+mcp/server.ts             MCP stdio server; forwards tool calls over a 127.0.0.1 WebSocket bridge to the open tab
 src/core/frame-core.ts    GEOMETRY CORE — types, schema, defaults, templates, motifs, placements, layers, state
 src/core/mesh.ts          extrusion (three.js), binary STL + 3MF writers
-src/core/vector.ts        2D export: prepareExport (clean + kerf), exportWarnings, SVG / DXF R12 writers, export2DFor (API/MCP entry)
+src/core/vector.ts        2D export: prepareExport (clean + kerf), exportWarnings, SVG / DXF R12 writers, export2DFor
+src/core/store.ts         client state store: localStorage (guarded, in-memory fallback), patch/replace/reset/template, design JSON
+src/core/bridge.ts        MCP bridge protocol, Origin allowlist, handleCall (the tool implementations, run in the tab)
 src/ui/index.html         UI shell; Vite root
 src/ui/styles.css         CSS variables; light + dark via prefers-color-scheme (imported from app.ts)
-src/ui/app.ts             three.js viewer, parameter panel, template gallery, live sync
+src/ui/app.ts             three.js viewer, parameter panel, template gallery, store wiring, MCP bridge client
 src/ui/thumb.ts           top-view SVG of a built frame (template thumbnails)
+vercel.json               static Vercel config: build -> dist/, Git deploys off, security headers (CSP)
 .github/workflows/ci.yml  PR check: npm ci, typecheck, npm test
-test/core.test.ts         node:test suite for the core (templates x arc, applyPatch, migrate)
-test/vector.test.ts       2D export: SVG (closed subpaths, viewBox, well-formed) + DXF (structure, closed polylines, bbox, layers)
-vite.config.ts            root src/ui, outDir dist/
+.github/workflows/deploy.yml  Vercel CLI deploy: PR -> preview, main -> production
+.github/vercel-cli/       pinned Vercel CLI (own package.json + lockfile) for deploy.yml
+test/core.test.ts         core: templates x arc, applyPatch, migrate, colour validation
+test/vector.test.ts       2D export: SVG + DXF structure
+test/store.test.ts        store: persistence, blocked storage, migration, templates, design JSON, subscribe
+test/bridge.test.ts       handleCall for every tool + mcp/server.ts Origin allowlist (spawns it)
+vite.config.ts            root src/ui, outDir dist/, dev + preview on 127.0.0.1:5317
 tsconfig.json             strict, noEmit, allowImportingTsExtensions, erasableSyntaxOnly
-state.json, exports/, dist/   runtime / build output (gitignored)
+exports/, dist/, .vercel/     MCP exports / build output / Vercel CLI link (gitignored)
 ```
 
 ## How it works
 
-- **State** is `{ version: 3, params: {...}, view: { exploded, explode_gap } }`.
+- **State** is `{ version: 3, params: {...}, view: { exploded, explode_gap } }`, owned by the tab via `createStore()` (`store.ts`) and saved to `localStorage` under `layerframe.state`.
   - `migrate()` converts older multi-frame states (`shared`/`frames`/`active`).
   - `applyPatch()` deep-merges a patch: arrays are replaced and `null` deletes a key.
 - **The pipeline** is `buildLayers(params, ClipperLib)` in `frame-core.ts`:
@@ -73,18 +74,21 @@ state.json, exports/, dist/   runtime / build output (gitignored)
   4. Produce per-layer 2D regions as Clipper polygons with holes.
 
   `mesh.ts` then extrudes each layer to a height of `layer_h`.
-- **Shared code:** `frame-core.ts` and `mesh.ts` run in both the browser and Node. Keep them free of DOM, `window` and `fs`. ClipperLib and JSZip are passed in as arguments; both sides get them with `import X from 'clipper-lib'` / `'jszip'`. `build3MF` returns a `Uint8Array` in both runtimes.
+- **Shared code:** everything in `src/core/` runs in both the browser and Node (tests, MCP). Keep them free of DOM, `window` and `fs`. ClipperLib and JSZip are passed in as arguments; both sides get them with `import X from 'clipper-lib'` / `'jszip'`. `build3MF` returns a `Uint8Array` in both runtimes.
 - **Clipper scale:** Clipper works in integers at a scale of `S = 1000`. Always convert with `toC()`, and divide by `S` when reading results back.
 - **Coordinates:** units are mm. X is the width, centred on 0. Y runs up the frame, with the bottom edge at 0. Z is the layer stack.
-- **Sync:** every change (UI, API or MCP) goes through `PATCH /api/state`. The server persists `state.json` and broadcasts an SSE `state` event. The UI ignores events tagged with its own `x-source`.
+- **Sync:** every UI change goes through the store (`store.patch(..., source)`); subscribers rebuild the view. Other tabs follow via the `storage` event.
+- **MCP bridge:** `mcp/server.ts` listens on `127.0.0.1:5318` and accepts only allowlisted Origins (`BRIDGE_ORIGINS` in `bridge.ts`). The tab connects when the user clicks the MCP badge (opt-in, remembered), runs each call with `handleCall()` and returns the result; exports come back base64 and the MCP server writes `./exports`. One tab at a time (newest wins).
+- **Untrusted input:** designs arrive from files and MCP. `normalize()` clamps numbers, checks enums and forces colours to `#rrggbb`. Never put an unvalidated state string into `innerHTML`.
 
 ## Extending
 
-- **New parameter:** add it to the `Params` interface, `SCHEMA` and `DEFAULTS` in `frame-core.ts` (tsc flags any that are missing). The UI renders it automatically from the schema (types: `number`, `int`, `bool`, `enum`, `list`, `colors`; group `hidden` keeps it out of the panel), and the API and MCP pick it up too.
+- **New parameter:** add it to the `Params` interface, `SCHEMA` and `DEFAULTS` in `frame-core.ts` (tsc flags any that are missing). The UI renders it automatically from the schema (types: `number`, `int`, `bool`, `enum`, `list`, `colors`; group `hidden` keeps it out of the panel), and MCP picks it up too.
 - **New motif:** add a function to `MOTIF_LIBRARY` that returns polygons (`[[x, y], …]`) around the origin, about `d` mm across. Then add its name to `MOTIFS` (the `MotifName` type and `MOTIF_LIBRARY`'s `Record` type keep the two in sync). Each part gets its own lace outline on the top layer.
 - **New template:** add an entry to `TEMPLATES` (`note` plus `params`). Templates must never set `in_w` or `in_h`, because applying a template keeps the user's opening size. The `Template` type enforces this.
 - **New layout:** add a branch in `placements()`. Walk the border with `samplePath(framePath(p, inset), pitch)` so the pattern automatically follows the arched top.
-- **New API route:** add it in `server.ts`. Expose it in `mcp/server.ts` as a tool if an AI should be able to use it.
+- **New MCP tool:** add the method to `METHODS` and `handleCall()` in `bridge.ts` (with a test in `test/bridge.test.ts`), then register the tool in `mcp/server.ts` with `call('<method>', args)`.
+- **Bridge origins / CSP:** a new page origin must be added to `BRIDGE_ORIGINS`; the bridge port is also in `vercel.json`'s CSP `connect-src`.
 
 ## Geometry rules to preserve
 
@@ -101,14 +105,15 @@ Tests use `node:test` + `node:assert` (no framework dependency) and live in `tes
 
 1. Run `npm run typecheck`.
 2. Run `npm test`. `test/core.test.ts` builds every template with `arc` both on and off and asserts that the layer count is right, no layer is empty, and `out_w`/`out_h` exceed the opening. It also covers `applyPatch` and `migrate`. When you add a template, it's covered automatically. Add cases for new core behavior.
-3. Check the API: `/api/model`, then `/api/export?format=3mf&save=1` and `format=stl&layer=0`.
-4. Run `npm run build`, open the UI, click through the templates and size presets, and confirm the browser console shows no errors.
-   - Test servers on another `PORT` still read and write the real `state.json`. Back it up before driving the UI, and restore it afterward.
+3. Check MCP end to end: `npm start`, `npm run mcp` (or your MCP client), click the badge, then call a few tools (`set_params`, `export` 3mf / stl `layer: 0` / svg `split`) and confirm the tab updates and the files land in `./exports`.
+4. Run `npm run build` and `npm run serve`, open the UI, click through the templates, size presets, exports and Save / Open design, and confirm the browser console shows no errors and the network panel shows no requests beyond the page's own assets.
+   - The design lives in that browser's `localStorage`. Save it with **Save design** before a test click-through if you care about it, and reopen it afterward.
+5. Lint any workflow change with `uvx zizmor --persona=pedantic .github/workflows/`.
 
 ## Conventions
 
 - Strict TypeScript, ES modules, 2-space indent, single quotes, no framework.
 - Node-runnable TS only: relative imports use the `.ts` extension, `import type` for type-only imports, and no enums, namespaces or parameter properties (`erasableSyntaxOnly`).
-- Tooling is `typescript` + `vite` only. Keep the runtime dependencies to `three`, `clipper-lib` and `jszip` (plus the MCP SDK and `zod` for `mcp/`). Pin `@types/three` to the same minor as `three`.
+- Tooling is `typescript` + `vite` only. Keep the runtime dependencies to `three`, `clipper-lib` and `jszip` (plus the MCP SDK, `zod` and `ws` for `mcp/`). Pin `@types/three` to the same minor as `three`.
 - Geometry functions stay pure: params in, polygons out.
-- When you change behaviour, update `README.md` too: its templates table, API table and MCP tool list.
+- When you change behaviour, update `README.md` too: its templates table, MCP tool list and run / deploy notes.

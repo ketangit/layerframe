@@ -1,0 +1,8 @@
+{
+  "name": "layerframe-vercel-cli",
+  "private": true,
+  "description": "Pinned Vercel CLI for .github/workflows/deploy.yml (own lockfile so CI installs it with integrity hashes).",
+  "dependencies": {
+    "vercel": "63.1.2"
+  }
+}

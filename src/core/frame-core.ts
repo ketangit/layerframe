@@ -189,8 +189,17 @@ export function normalize(p: Partial<Params>): Params {
   }
   const r = out as unknown as Params;
   const n = layerCount(r);
-  const c = Array.isArray(r.colors) ? r.colors.slice(0, n) : [];
-  while (c.length < n) c.push(DEFAULTS.colors[c.length % DEFAULTS.colors.length]);
+  // Colours must be #rrggbb (#rgb is expanded): the UI renders them into markup, and designs can come from
+  // untrusted files or MCP, so anything else falls back to the default for that layer.
+  const dflt = (i: number) => DEFAULTS.colors[i % DEFAULTS.colors.length];
+  const hex = (x: unknown, i: number) => {
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(x).trim());
+    if (!m) return dflt(i);
+    const h = m[1].length === 3 ? [...m[1]].map((d) => d + d).join('') : m[1];
+    return '#' + h.toLowerCase();
+  };
+  const c = (Array.isArray(r.colors) ? r.colors.slice(0, n) : []).map(hex);
+  while (c.length < n) c.push(dflt(c.length));
   r.colors = c;
   return r;
 }

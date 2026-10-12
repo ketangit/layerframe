@@ -2,21 +2,21 @@
 
 > Project status, decisions and blockers. Read on session start; update in place as work progresses. Keep entries terse.
 
-**Last updated:** 2026-10-11
+**Last updated:** 2026-10-12
 
 ---
 
 ## Status
 
 - **Project:** in-progress
-- **Current epic:** #7 — 2D layer export for laser / CNC (SVG + DXF)
+- **Current epic:** #23, browser-only app + static deploy to https://layerframe.craftedbyk.com (one PR, tracked by one issue)
 - **Workflow:** PLAN.md (plan → one issue per step → review gate → one PR per issue, `Closes #N`)
 
 ## Issues in flight
 
 | # | Title | Status |
 |---|-------|--------|
-| 6 | UI: laser / CNC export buttons | in progress (`feature/6-laser-export-ui`) |
+| 23 | Browser-only app + Vercel static deploy + `layerframe` CNAME | in progress (`deploy/vercel-static`): code done; Vercel project, secrets, domain and DNS pending |
 
 ## Done
 
@@ -29,6 +29,9 @@
 - **2026-10-11** — PR #16 merged (closes #4): `prepareExport` (kerf) and `exportWarnings` (`baa9261`).
 - **2026-10-11** — PR #18 merged (closes #17): Vite `hmr.server` → `ws.server`; the deprecation warning is gone.
 - **2026-10-11** — PR #19 merged (closes #5): `/api/export` svg|dxf with layer / split / kerf, the MCP `export` tool, and `export2DFor` (`c4a26e3`).
+- **2026-10-11** — PR #20 merged (closes #6): UI laser / CNC export buttons (`a55893f`). Epic #7 closed.
+- **2026-10-11** — PR #21 merged: dropped A/B size presets, default 4×6 in, Custom W×H (mm) (`5ec59d2`). No issue (direct ask).
+- **2026-10-11** — PR #22 merged: renamed to LayerFrame, repo `ketangit/layerframe`, folder `ClaudeCoWork/layerframe` (`be89a9d`).
 
 ---
 
@@ -90,6 +93,11 @@
 - **2026-10-11** — UI testing gotcha: a click-through on the test server writes the real `state.json` through the live sync. Back it up first and restore it afterward (CLAUDE.md already says this). It happened during the #6 check and was restored from the backup.
 - **2026-10-11** — Sample-SVG review in Inkscape 1.3.2 found tiny lens-shaped islands in the daisy lace, where neighboring petal outlines overlap (about 0.5 mm). These are for #4's thin-feature warnings.
 - **2026-10-11** — Renamed repo `ketangit/layerframe-studio` → `ketangit/layerframe`, product "LayerFrame Studio" → "LayerFrame", local folder → `ClaudeCoWork/layerframe`. MCP server name is `layerframe`; `LAYERFRAME_URL` unchanged.
+- **2026-10-12** — Browser-only everywhere: `server.ts`, `/api/*`, SSE and `state.json` removed. The tab owns state (`src/core/store.ts`, `localStorage` with in-memory fallback). One large PR, tracked by issue #23 (Ketan's call).
+- **2026-10-12** — MCP via a WebSocket bridge: `mcp/server.ts` listens on 127.0.0.1:5318 with an Origin allowlist; the tab connects opt-in (badge click, remembered). Local tab is guaranteed; the live site is best-effort (Chrome LNA prompt, Safari may block). Added the `ws` dependency (mcp/ only).
+- **2026-10-12** — `normalize()` now forces colours to `#rrggbb`: designs come from files and MCP, and colours are rendered into `innerHTML`.
+- **2026-10-12** — Deploy: Vercel Hobby, static only, via GH Actions + Vercel CLI (pinned in `.github/vercel-cli/` with its own lockfile, which zizmor's adhoc-packages audit requires). Vercel Git integration is off. Only `layerframe.craftedbyk.com` goes into Vercel.
+- **2026-10-12** — DNS: Ketan adds the single `layerframe` CNAME by hand in Namecheap (no API: `setHosts` replaces every record). Pre-flight baseline: NS dns1/dns2.registrar-servers.com, apex A 199.36.158.100 (Firebase), no CAA, `layerframe` NXDOMAIN, apex `HTTP/1.1 200 OK`.
 
 ## Open Questions / Blockers
 

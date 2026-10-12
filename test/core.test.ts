@@ -57,3 +57,11 @@ describe('migrate', () => {
     assert.deepEqual(s.view, { exploded: false, explode_gap: 8 });
   });
 });
+
+describe('normalize: colours', () => {
+  it('keeps #rrggbb, expands #rgb and replaces anything else with the layer default', () => {
+    const d = normalize({}).colors;
+    const p = normalize({ colors: ['#ABCDEF', '#0f0', '"><img src=x onerror=alert(1)>', 'red', 42 as unknown as string] });
+    assert.deepEqual(p.colors.slice(0, 5), ['#abcdef', '#00ff00', d[2], d[3], d[4]]);
+  });
+});
