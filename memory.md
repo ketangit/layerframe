@@ -9,14 +9,14 @@
 ## Status
 
 - **Project:** in-progress
-- **Current epic:** #23, browser-only app + static deploy to https://layerframe.craftedbyk.com (one PR, tracked by one issue)
+- **Current epic:** none (#23, browser-only app + static deploy, shipped 2026-10-12)
 - **Workflow:** PLAN.md (plan → one issue per step → review gate → one PR per issue, `Closes #N`)
 
 ## Issues in flight
 
 | # | Title | Status |
 |---|-------|--------|
-| 23 | Browser-only app + Vercel static deploy + `layerframe` CNAME | in progress (`deploy/vercel-static`): code done; Vercel project, secrets, domain and DNS pending |
+| — | none | — |
 
 ## Done
 
@@ -98,6 +98,7 @@
 - **2026-10-12** — `normalize()` now forces colours to `#rrggbb`: designs come from files and MCP, and colours are rendered into `innerHTML`.
 - **2026-10-12** — Deploy: Vercel Hobby, static only, via GH Actions + Vercel CLI (pinned in `.github/vercel-cli/` with its own lockfile, which zizmor's adhoc-packages audit requires). Vercel Git integration is off. Only `layerframe.craftedbyk.com` goes into Vercel.
 - **2026-10-12** — DNS: Ketan adds the single `layerframe` CNAME by hand in Namecheap (no API: `setHosts` replaces every record). Pre-flight baseline: NS dns1/dns2.registrar-servers.com, apex A 199.36.158.100 (Firebase), no CAA, `layerframe` NXDOMAIN, apex `HTTP/1.1 200 OK`.
+- **2026-10-12** — #23 shipped via PR #24 (merge cd2568c). Live at https://layerframe.craftedbyk.com: Let's Encrypt cert (auto-renew), CSP + security headers, zero `/api` calls. CNAME `layerframe` -> `13e697fb365d3b25.vercel-dns-017.com`; apex records unchanged (diffed). Preview deploys sit behind Vercel Authentication; production is public. Gotcha: `cleanUrls` with `framework: null` 404'd the root, removed. Do NOT accept Vercel's suggestion to move nameservers to ns1/ns2.vercel-dns.com.
 
 ## Open Questions / Blockers
 
